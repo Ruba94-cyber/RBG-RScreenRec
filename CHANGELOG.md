@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — keyboard controls, user experience, and reliability
+## 1.3.0 — keyboard controls, recording controls, and reliability
 
 - Add Windows Explorer-backed, configurable per-user hotkeys for screen, window, and pause/resume modes without idle background processes.
 - Verify persisted hotkeys, detect conflicts across RBG utilities, and roll back partially written shortcuts.

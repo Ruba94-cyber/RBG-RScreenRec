@@ -32,7 +32,7 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\tests\\Test-Shortcuts.ps1 -Executable '.\\bin\Release\\RBG - RScreenRec.exe' -Namespace 'RScreenRec' -ApplicationName 'RBG RScreenRec'
       - uses: actions/upload-artifact@v4
         with:
-          name: RBG-RScreenRec-1.2.0-windows-x64
+          name: RBG-RScreenRec-1.3.0-windows-x64
           path: release/*
           if-no-files-found: error
           retention-days: 14
