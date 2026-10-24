@@ -12,6 +12,7 @@ namespace RScreenRec
     {
         private readonly Timer blinkTimer;
         private bool blinkOn = true;
+        private bool paused;
         private readonly float dpiScale;
         private bool dragging;
         private Point dragStartCursor;
@@ -61,6 +62,21 @@ namespace RScreenRec
             Shown += (s, e) => blinkTimer.Start();
         }
 
+        public void SetPaused(bool value)
+        {
+            paused = value;
+            if (paused)
+            {
+                blinkTimer.Stop();
+                blinkOn = true;
+            }
+            else if (Visible)
+            {
+                blinkTimer.Start();
+            }
+            Invalidate();
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -104,10 +120,11 @@ namespace RScreenRec
                 glowSize);
 
             Rectangle dotRect = new Rectangle(dotX, dotY, dotSize, dotSize);
-            using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(blinkOn ? 180 : 25, 255, 56, 56)))
-            using (SolidBrush dotBrush = new SolidBrush(blinkOn
-                ? Color.FromArgb(255, 255, 35, 35)
-                : Color.FromArgb(130, 160, 60, 60)))
+            Color dotColor = paused ? Color.FromArgb(255, 235, 173, 38)
+                : (blinkOn ? Color.FromArgb(255, 255, 35, 35) : Color.FromArgb(130, 160, 60, 60));
+            using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(blinkOn ? 180 : 25,
+                       dotColor.R, dotColor.G, dotColor.B)))
+            using (SolidBrush dotBrush = new SolidBrush(dotColor))
             {
                 e.Graphics.FillEllipse(glowBrush, glowRect);
                 e.Graphics.FillEllipse(dotBrush, dotRect);
@@ -124,7 +141,7 @@ namespace RScreenRec
                 e.Graphics.FillEllipse(highlightBrush, highlightRect);
             }
 
-            string label = "REC";
+            string label = paused ? "PAUSE" : "REC";
             float fontSize = DpiHelper.ScaleValue(10, dpiScale);
             using (Font font = new Font("Segoe UI Semibold", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
             using (SolidBrush textBrush = new SolidBrush(Color.White))
