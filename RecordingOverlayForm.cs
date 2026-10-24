@@ -208,6 +208,10 @@ namespace RScreenRec
         {
             get
             {
+                string testRoot = Environment.GetEnvironmentVariable("RBG_OVERLAY_POSITION_TEST_ROOT");
+                if (!string.IsNullOrWhiteSpace(testRoot))
+                    return Path.Combine(testRoot, "overlay-position.txt");
+
                 return Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                     "RBG", "RScreenRec", "overlay-position.txt");

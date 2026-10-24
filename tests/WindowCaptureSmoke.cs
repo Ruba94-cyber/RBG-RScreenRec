@@ -5,8 +5,16 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
+using FlaUI.UIA3;
 using RScreenRec;
+using FlaButton = FlaUI.Core.AutomationElements.Button;
+using FlaListBox = FlaUI.Core.AutomationElements.ListBox;
+using FlaTextBox = FlaUI.Core.AutomationElements.TextBox;
 
 internal static class WindowCaptureSmoke
 {
@@ -48,92 +56,94 @@ internal static class WindowCaptureSmoke
             throw new MissingMethodException("RScreenRec.WindowPicker.SelectWindow was not found.");
 
         Exception automationFailure = null;
-        bool clickRequested = false;
-        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
-        IntPtr selectedWindow;
-        using (var automationTimer = new Timer { Interval = 50 })
+        Window picker = null;
+        var automationThread = new Thread(() =>
         {
-            automationTimer.Tick += (sender, eventArgs) =>
-            {
-                IntPtr dialog = FindWindow(null, "Select window - RScreenRec");
-                if (dialog == IntPtr.Zero)
-                {
-                    if (DateTime.UtcNow >= deadline)
-                    {
-                        automationFailure = new TimeoutException("The window picker did not appear.");
-                        Form pickerDialog = null;
-                        foreach (Form openForm in Application.OpenForms)
-                            if (openForm.Text == "Select window - RScreenRec") { pickerDialog = openForm; break; }
-                        if (pickerDialog != null)
-                            pickerDialog.Close();
-                        automationTimer.Stop();
-                    }
-                    return;
-                }
-
-                IntPtr listBox = IntPtr.Zero;
-                IntPtr selectButton = IntPtr.Zero;
-                IntPtr cancelButton = IntPtr.Zero;
-                IntPtr child = GetWindow(dialog, 5); // GW_CHILD
-                while (child != IntPtr.Zero)
-                {
-                    var className = new StringBuilder(256);
-                    GetClassName(child, className, className.Capacity);
-                    var text = new StringBuilder(256);
-                    GetWindowText(child, text, text.Capacity);
-                    if (className.ToString().IndexOf("LISTBOX", StringComparison.OrdinalIgnoreCase) >= 0)
-                        listBox = child;
-                    if (className.ToString().IndexOf("BUTTON", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        if (text.ToString() == "Select") selectButton = child;
-                        if (text.ToString() == "Cancel") cancelButton = child;
-                    }
-                    child = GetWindow(child, 2); // GW_HWNDNEXT
-                }
-
-                if (DateTime.UtcNow >= deadline && !clickRequested)
-                {
-                    automationFailure = new TimeoutException("The synthetic window was missing from the picker.");
-                    if (cancelButton != IntPtr.Zero)
-                        SendMessageInt(cancelButton, 0x00F5, IntPtr.Zero, IntPtr.Zero); // BM_CLICK
-                    automationTimer.Stop();
-                    return;
-                }
-                if (listBox == IntPtr.Zero || selectButton == IntPtr.Zero)
-                    return;
-
-                int count = SendMessageInt(listBox, 0x018B, IntPtr.Zero, IntPtr.Zero).ToInt32(); // LB_GETCOUNT
-                for (int index = 0; index < count; index++)
-                {
-                    int length = SendMessageInt(listBox, 0x018A, new IntPtr(index), IntPtr.Zero).ToInt32(); // LB_GETTEXTLEN
-                    var itemText = new StringBuilder(Math.Max(1, length + 1));
-                    SendMessageText(listBox, 0x0189, new IntPtr(index), itemText); // LB_GETTEXT
-                    if (itemText.ToString().IndexOf("RScreenRec synthetic capture target", StringComparison.OrdinalIgnoreCase) < 0)
-                        continue;
-
-                    SendMessageInt(listBox, 0x0186, new IntPtr(index), IntPtr.Zero); // LB_SETCURSEL
-                    clickRequested = true;
-                    SendMessageInt(selectButton, 0x00F5, IntPtr.Zero, IntPtr.Zero); // BM_CLICK
-                    automationTimer.Stop();
-                    return;
-                }
-            };
-
-            automationTimer.Start();
             try
             {
-                selectedWindow = (IntPtr)pickerMethod.Invoke(null, null);
+                using (var automation = new UIA3Automation())
+                {
+                    var desktop = automation.GetDesktop();
+                    DateTime deadline = DateTime.UtcNow.AddSeconds(15);
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        picker = desktop.FindFirstChild(cf => cf
+                            .ByName("Select window - RScreenRec")
+                            .And(cf.ByControlType(ControlType.Window)))?.AsWindow();
+                        if (picker != null) break;
+                        Thread.Sleep(100);
+                    }
+                    if (picker == null)
+                        throw new TimeoutException("FlaUI could not find the RScreenRec window picker.");
+
+                    FlaListBox list = picker.FindFirstDescendant(cf => cf
+                        .ByControlType(ControlType.List))?.AsListBox();
+                    if (list == null)
+                        throw new InvalidOperationException("FlaUI could not find the picker window list.");
+
+                    FlaTextBox search = picker.FindFirstDescendant(cf => cf
+                        .ByControlType(ControlType.Edit))?.AsTextBox();
+                    if (search == null)
+                        throw new InvalidOperationException("FlaUI could not find the picker search box.");
+                    search.Text = "synthetic capture target";
+                    Thread.Sleep(200);
+
+                    var item = list.Items.FirstOrDefault(candidate =>
+                        candidate.Name.IndexOf("RScreenRec synthetic capture target", StringComparison.OrdinalIgnoreCase) >= 0);
+                    if (item == null)
+                    {
+                        string[] itemNames = list.Items.Select(candidate => candidate.Name).ToArray();
+                        throw new InvalidOperationException("The synthetic target was not listed by the picker. Items: " +
+                            string.Join(" | ", itemNames));
+                    }
+                    item.Select();
+                    Thread.Sleep(100);
+                    var selectedItem = list.Items.FirstOrDefault(candidate => candidate.IsSelected);
+                    if (selectedItem == null || !selectedItem.Name.Equals(item.Name, StringComparison.Ordinal))
+                        throw new InvalidOperationException("FlaUI did not select the filtered synthetic target. Selected item: " +
+                            (selectedItem == null ? "<none>" : selectedItem.Name));
+
+                    FlaButton selectButton = picker.FindFirstDescendant(cf => cf
+                        .ByName("Select")
+                        .And(cf.ByControlType(ControlType.Button)))?.AsButton();
+                    if (selectButton == null)
+                        throw new InvalidOperationException("FlaUI could not find the picker Select button.");
+                    selectButton.Invoke();
+                }
             }
-            catch (TargetInvocationException ex)
+            catch (Exception ex)
             {
-                throw ex.InnerException ?? ex;
+                automationFailure = ex;
+                try
+                {
+                    FlaButton cancelButton = picker?.FindFirstDescendant(cf => cf
+                        .ByName("Cancel")
+                        .And(cf.ByControlType(ControlType.Button)))?.AsButton();
+                    if (cancelButton != null) cancelButton.Invoke();
+                }
+                catch { }
             }
+        });
+        automationThread.IsBackground = true;
+        automationThread.SetApartmentState(ApartmentState.STA);
+        automationThread.Start();
+
+        IntPtr selectedWindow;
+        try
+        {
+            selectedWindow = (IntPtr)pickerMethod.Invoke(null, null);
         }
+        catch (TargetInvocationException ex)
+        {
+            throw ex.InnerException ?? ex;
+        }
+        if (!automationThread.Join(TimeSpan.FromSeconds(15)))
+            throw new TimeoutException("FlaUI did not complete window selection within 15 seconds.");
 
         if (automationFailure != null)
             throw automationFailure;
-        if (!clickRequested || selectedWindow != expectedWindow)
-            throw new InvalidOperationException("The picker did not return the synthetic test window.");
+        if (selectedWindow != expectedWindow)
+            throw new InvalidOperationException("The picker returned " + selectedWindow + ", expected " + expectedWindow + ".");
         Console.WriteLine("picker_selection=synthetic target");
         return selectedWindow;
     }
@@ -209,7 +219,7 @@ internal static class WindowCaptureSmoke
             Console.WriteLine("backend=" + recorder.WindowCaptureBackend);
             duration.Start();
 
-            using (var timer = new Timer { Interval = 100 })
+            using (var timer = new System.Windows.Forms.Timer { Interval = 100 })
             {
                 timer.Tick += (sender, eventArgs) =>
                 {

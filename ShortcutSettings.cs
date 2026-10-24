@@ -118,9 +118,7 @@ namespace RScreenRec
                     string first = firstInput.Text.Trim();
                     string second = secondInput.Text.Trim();
                     string third = recorder ? thirdInput.Text.Trim() : "";
-                    if ((first.Length > 0 && MatchesShortcut(first, second)) ||
-                        (recorder && third.Length > 0 &&
-                            (MatchesShortcut(first, third) || MatchesShortcut(second, third))))
+                    if (!HasDistinctShortcuts(first, second, third, recorder))
                     {
                         MessageBox.Show(dialog, "Each mode must use a different shortcut.",
                             applicationName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -247,7 +245,15 @@ namespace RScreenRec
 
             // Names are fixed by callers; never take arbitrary file paths from user input.
             return Path.Combine(root, ShortcutFolderName,
-                applicationName + " - " + mode + ".lnk");
+                applicationName + " - " + SanitizeFileNamePart(mode) + ".lnk");
+        }
+
+        private static string SanitizeFileNamePart(string value)
+        {
+            string safe = value ?? "";
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+                safe = safe.Replace(invalid, '-');
+            return safe.Trim();
         }
 
         private static bool MatchesShortcut(string persisted, string requested)
@@ -258,6 +264,13 @@ namespace RScreenRec
             Array.Sort(right, StringComparer.OrdinalIgnoreCase);
             return string.Equals(string.Join("+", left), string.Join("+", right),
                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasDistinctShortcuts(string first, string second, string third, bool includeThird)
+        {
+            return !((first.Length > 0 && MatchesShortcut(first, second)) ||
+                (includeThird && third.Length > 0 &&
+                    (MatchesShortcut(first, third) || MatchesShortcut(second, third))));
         }
 
         // Detect conflicts within both RBG utilities. Explorer and other software can still

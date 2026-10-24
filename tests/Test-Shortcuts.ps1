@@ -17,29 +17,78 @@ try {
     $save = $type.GetMethod('SaveShortcut', $flags)
     $read = $type.GetMethod('ReadShortcut', $flags)
     $conflict = $type.GetMethod('FindShortcutConflict', $flags)
-    if ($null -eq $save -or $null -eq $read -or $null -eq $conflict) { throw 'Shortcut entry points missing.' }
+    $distinct = $type.GetMethod('HasDistinctShortcuts', $flags)
+    if ($null -eq $save -or $null -eq $read -or $null -eq $conflict -or $null -eq $distinct) { throw 'Shortcut entry points missing.' }
+
+    $createInput = $type.GetMethod('CreateShortcutInput', $flags)
+    $keyDown = [Windows.Forms.Control].GetMethod('OnKeyDown', [Reflection.BindingFlags]::NonPublic -bor [Reflection.BindingFlags]::Instance)
+    if ($null -eq $createInput -or $null -eq $keyDown) { throw 'Shortcut capture input entry points missing.' }
+    $captureInput = $createInput.Invoke($null, @(0, 0, 200))
+    try {
+        $keys = [Windows.Forms.Keys]
+        $firstKey = [Windows.Forms.KeyEventArgs]::new($keys::Control -bor $keys::Alt -bor $keys::F8)
+        $keyDown.Invoke($captureInput, @($firstKey)) | Out-Null
+        if ($captureInput.Text -ne 'Ctrl+Alt+F8') { throw "Shortcut capture missed the standard chord: $($captureInput.Text)" }
+
+        $shiftedKey = [Windows.Forms.KeyEventArgs]::new($keys::Control -bor $keys::Alt -bor $keys::Shift -bor $keys::F9)
+        $keyDown.Invoke($captureInput, @($shiftedKey)) | Out-Null
+        if ($captureInput.Text -ne 'Ctrl+Alt+Shift+F9') { throw "Shortcut capture missed Shift: $($captureInput.Text)" }
+
+        $invalidKey = [Windows.Forms.KeyEventArgs]::new($keys::Control -bor $keys::Alt -bor $keys::D0)
+        $keyDown.Invoke($captureInput, @($invalidKey)) | Out-Null
+        if ($captureInput.Text -ne 'Ctrl+Alt+Shift+F9') { throw 'Shortcut capture accepted a non-letter/non-function key.' }
+
+        $deleteKey = [Windows.Forms.KeyEventArgs]::new($keys::Delete)
+        $keyDown.Invoke($captureInput, @($deleteKey)) | Out-Null
+        if ($captureInput.Text -ne '') { throw 'Delete did not clear the captured shortcut.' }
+    } finally {
+        $captureInput.Dispose()
+    }
+
+    if ([bool]$distinct.Invoke($null, @('Ctrl+Alt+F8', 'Alt+Ctrl+F8', 'Ctrl+Alt+P', $true))) {
+        throw 'Duplicate shortcuts were accepted when modifier order differed.'
+    }
+    if ([bool]$distinct.Invoke($null, @('Ctrl+Alt+F8', 'Ctrl+Alt+F9', 'Ctrl+Alt+F8', $true))) {
+        throw 'A third-mode duplicate was accepted.'
+    }
+    if (-not [bool]$distinct.Invoke($null, @('Ctrl+Alt+F8', 'Ctrl+Alt+F9', 'Ctrl+Alt+P', $true))) {
+        throw 'Distinct shortcuts were rejected.'
+    }
 
     $modeA = 'Test screen mode'
     $modeB = 'Test window mode'
+    $modeC = 'Pause / resume'
     $first = 'Ctrl+Alt+F8'
     $second = 'Ctrl+Alt+F9'
+    $third = 'Ctrl+Alt+P'
     $save.Invoke($null, @($ApplicationName, $modeA, '--test-screen', $first)) | Out-Null
     $save.Invoke($null, @($ApplicationName, $modeB, '--test-window', $second)) | Out-Null
+    $save.Invoke($null, @($ApplicationName, $modeC, '--toggle-pause', $third)) | Out-Null
     $actualFirst = [string]$read.Invoke($null, @($ApplicationName, $modeA))
     $actualSecond = [string]$read.Invoke($null, @($ApplicationName, $modeB))
+    $actualThird = [string]$read.Invoke($null, @($ApplicationName, $modeC))
     $normalize = { param([string]$key) (($key -split '\+' | ForEach-Object { $_.Trim() } | Sort-Object) -join '+').ToUpperInvariant() }
     if ((& $normalize $actualFirst) -ne (& $normalize $first) -or
-        (& $normalize $actualSecond) -ne (& $normalize $second)) {
-        throw "Hotkey roundtrip failed: $actualFirst / $actualSecond"
+        (& $normalize $actualSecond) -ne (& $normalize $second) -or
+        (& $normalize $actualThird) -ne (& $normalize $third)) {
+        throw "Hotkey roundtrip failed: $actualFirst / $actualSecond / $actualThird"
     }
 
     $links = @(Get-ChildItem -LiteralPath $root -Filter '*.lnk' -Recurse)
-    if ($links.Count -ne 2) { throw "Expected two shortcuts, found $($links.Count)." }
+    if ($links.Count -ne 3) { throw "Expected three shortcuts, found $($links.Count)." }
+    $pauseLink = $links | Where-Object { $_.Name -like '*Pause*resume*.lnk' } | Select-Object -First 1
+    if ($null -eq $pauseLink -or $pauseLink.Name.Contains('/') -or $pauseLink.Name.Contains('\')) {
+        throw 'Pause/resume mode did not produce a valid shortcut filename.'
+    }
     $shell = New-Object -ComObject WScript.Shell
     try {
         $link = $shell.CreateShortcut(($links | Where-Object { $_.Name -like "*$modeA*" } | Select-Object -First 1).FullName)
         if ($link.Arguments -ne '--test-screen') { throw 'Shortcut lost its mode argument.' }
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($link)
+        $link = $shell.CreateShortcut($pauseLink.FullName)
+        if ($link.Arguments -ne '--toggle-pause') { throw 'Pause/resume shortcut lost its mode argument.' }
     } finally {
+        if ($null -ne $link) { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($link) }
         [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
     }
 
