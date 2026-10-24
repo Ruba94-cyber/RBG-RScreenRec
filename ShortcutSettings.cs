@@ -17,112 +17,173 @@ namespace RScreenRec
         public static void Show(string applicationName, string firstMode, string secondMode,
             string firstArgument, string secondArgument, string firstSuggestion, string secondSuggestion)
         {
+            bool recorder = applicationName.IndexOf("RScreenRec", StringComparison.OrdinalIgnoreCase) >= 0;
+            const string thirdMode = "Pause / resume";
+            const string thirdArgument = "--toggle-pause";
             using (var dialog = new Form
             {
-                Text = applicationName + " - Keyboard shortcuts",
+                Text = applicationName + " - Settings",
                 StartPosition = FormStartPosition.CenterScreen,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 MaximizeBox = false,
                 MinimizeBox = false,
                 ShowInTaskbar = true,
-                ClientSize = new Size(445, 264),
+                ClientSize = new Size(455, recorder ? 395 : 358),
                 Font = new Font("Segoe UI", 9F)
             })
             {
                 var introduction = new Label
                 {
-                    AutoSize = false,
-                    Location = new Point(18, 14),
-                    Size = new Size(410, 40),
-                    Text = "Press Ctrl+Alt+letter or Ctrl+Alt+F1-F12 in each box.\r\nPress Delete to remove an assignment."
+                    Location = new Point(18, 13),
+                    Size = new Size(419, 43),
+                    Text = "Assign Ctrl+Alt+letter or Ctrl+Alt+F1-F12 combinations.\r\nPress Delete in a shortcut box to remove the assignment."
                 };
-
                 var firstLabel = new Label
                 {
-                    Location = new Point(18, 67),
-                    Size = new Size(190, 22),
-                    Text = firstMode
+                    Location = new Point(18, 65), Size = new Size(405, 21), Text = firstMode
                 };
-                var firstInput = CreateShortcutInput(18, 91, 408);
+                var firstInput = CreateShortcutInput(18, 88, 418);
                 firstInput.Text = ReadShortcut(applicationName, firstMode) ?? firstSuggestion;
-
                 var secondLabel = new Label
                 {
-                    Location = new Point(18, 127),
-                    Size = new Size(190, 22),
-                    Text = secondMode
+                    Location = new Point(18, 124), Size = new Size(405, 21), Text = secondMode
                 };
-                var secondInput = CreateShortcutInput(18, 151, 408);
+                var secondInput = CreateShortcutInput(18, 147, 418);
                 secondInput.Text = ReadShortcut(applicationName, secondMode) ?? secondSuggestion;
+
+                var thirdLabel = new Label
+                {
+                    Location = new Point(18, 184), Size = new Size(405, 21),
+                    Text = thirdMode, Visible = recorder
+                };
+                var thirdInput = CreateShortcutInput(18, 207, 418);
+                thirdInput.Visible = recorder;
+                if (recorder)
+                    thirdInput.Text = ReadShortcut(applicationName, thirdMode) ?? "Ctrl+Alt+P";
+
+                var badgeLabel = new Label
+                {
+                    Text = "REC badge size (%)", Location = new Point(18, 257),
+                    Size = new Size(220, 23), Visible = recorder
+                };
+                var badgeScale = new NumericUpDown
+                {
+                    Location = new Point(338, 254), Size = new Size(98, 27),
+                    Minimum = 70, Maximum = 130, Increment = 5,
+                    Value = VisualPreferences.BadgeSizePercent, Visible = recorder
+                };
+
+                var borderLabel = new Label
+                {
+                    Text = "Cyan border fade (milliseconds)", Location = new Point(18, 198),
+                    Size = new Size(285, 23), Visible = !recorder
+                };
+                var fadeDuration = new NumericUpDown
+                {
+                    Location = new Point(338, 195), Size = new Size(98, 27),
+                    Minimum = 120, Maximum = 500, Increment = 20,
+                    Value = VisualPreferences.BorderFadeDurationMs, Visible = !recorder
+                };
+                var magnifier = new CheckBox
+                {
+                    Text = "Show optional pixel magnifier when selecting an area",
+                    Location = new Point(18, 240), Size = new Size(418, 25),
+                    Checked = VisualPreferences.SelectionMagnifierEnabled,
+                    Visible = !recorder
+                };
 
                 var note = new Label
                 {
-                    Location = new Point(18, 187),
-                    Size = new Size(408, 33),
+                    Location = new Point(18, recorder ? 294 : 275),
+                    Size = new Size(418, 44),
                     ForeColor = Color.DimGray,
-                    Text = "Windows Explorer activates the shortcuts; it must be running.\r\nMoving the executable requires saving these settings again."
+                    Text = "Windows Explorer handles global shortcuts; no background app.\r\nIf the executable is moved, save shortcuts again."
                 };
 
                 var saveButton = new Button
                 {
-                    Text = "Save shortcuts",
-                    Location = new Point(222, 227),
-                    Size = new Size(120, 29)
+                    Text = "Save settings",
+                    Location = new Point(228, recorder ? 351 : 314),
+                    Size = new Size(117, 30)
                 };
                 var cancelButton = new Button
                 {
                     Text = "Cancel",
-                    Location = new Point(350, 227),
-                    Size = new Size(78, 29),
+                    Location = new Point(357, recorder ? 351 : 314),
+                    Size = new Size(79, 30),
                     DialogResult = DialogResult.Cancel
                 };
-
                 saveButton.Click += (sender, args) =>
                 {
                     string first = firstInput.Text.Trim();
                     string second = secondInput.Text.Trim();
-                    if (first.Length > 0 && string.Equals(first, second, StringComparison.OrdinalIgnoreCase))
+                    string third = recorder ? thirdInput.Text.Trim() : "";
+                    if ((first.Length > 0 && MatchesShortcut(first, second)) ||
+                        (recorder && third.Length > 0 &&
+                            (MatchesShortcut(first, third) || MatchesShortcut(second, third))))
                     {
-                        MessageBox.Show(dialog, "The two modes cannot share the same shortcut.",
+                        MessageBox.Show(dialog, "Each mode must use a different shortcut.",
                             applicationName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        return;
-                    }
-
-                    string conflict = FindShortcutConflict(applicationName, firstMode, first, secondMode, second);
-                    if (conflict != null)
-                    {
-                        MessageBox.Show(dialog, conflict, applicationName,
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         return;
                     }
 
                     try
                     {
-                        string previousFirst = ReadShortcut(applicationName, firstMode);
-                        string previousSecond = ReadShortcut(applicationName, secondMode);
+                        string conflict = FindShortcutConflict(applicationName, firstMode,
+                            first, secondMode, second);
+                        if (recorder && conflict == null)
+                            conflict = FindShortcutConflict(applicationName, thirdMode,
+                                third, firstMode, first);
+                        if (conflict != null)
+                        {
+                            MessageBox.Show(dialog, conflict, applicationName,
+                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+
+                        string oldFirst = ReadShortcut(applicationName, firstMode);
+                        string oldSecond = ReadShortcut(applicationName, secondMode);
+                        string oldThird = recorder ? ReadShortcut(applicationName, thirdMode) : null;
                         try
                         {
                             SaveShortcut(applicationName, firstMode, firstArgument, first);
                             SaveShortcut(applicationName, secondMode, secondArgument, second);
+                            if (recorder)
+                                SaveShortcut(applicationName, thirdMode, thirdArgument, third);
+
                             if (!MatchesShortcut(ReadShortcut(applicationName, firstMode), first) ||
-                                !MatchesShortcut(ReadShortcut(applicationName, secondMode), second))
-                                throw new IOException("Windows did not persist the requested shortcut keys.");
+                                !MatchesShortcut(ReadShortcut(applicationName, secondMode), second) ||
+                                (recorder && !MatchesShortcut(ReadShortcut(applicationName, thirdMode), third)))
+                                throw new IOException("Windows did not persist the shortcut keys.");
+
+                            if (recorder)
+                                VisualPreferences.BadgeSizePercent = (int)badgeScale.Value;
+                            else
+                            {
+                                VisualPreferences.BorderFadeDurationMs = (int)fadeDuration.Value;
+                                VisualPreferences.SelectionMagnifierEnabled = magnifier.Checked;
+                            }
                         }
                         catch
                         {
-                            // Do not leave one of two mode shortcuts modified after a partial failure.
-                            try { SaveShortcut(applicationName, firstMode, firstArgument, previousFirst ?? ""); }
-                            catch (Exception restoreError) { System.Diagnostics.Debug.WriteLine(restoreError); }
-                            try { SaveShortcut(applicationName, secondMode, secondArgument, previousSecond ?? ""); }
-                            catch (Exception restoreError) { System.Diagnostics.Debug.WriteLine(restoreError); }
+                            try { SaveShortcut(applicationName, firstMode, firstArgument, oldFirst ?? ""); }
+                            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
+                            try { SaveShortcut(applicationName, secondMode, secondArgument, oldSecond ?? ""); }
+                            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
+                            if (recorder)
+                            {
+                                try { SaveShortcut(applicationName, thirdMode, thirdArgument, oldThird ?? ""); }
+                                catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
+                            }
                             throw;
                         }
+
                         dialog.DialogResult = DialogResult.OK;
                         dialog.Close();
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show(dialog, "Unable to save Windows shortcuts: " + ex.Message,
+                        MessageBox.Show(dialog, "Could not save settings: " + ex.Message,
                             applicationName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 };
@@ -130,7 +191,8 @@ namespace RScreenRec
                 dialog.Controls.AddRange(new Control[]
                 {
                     introduction, firstLabel, firstInput, secondLabel, secondInput,
-                    note, saveButton, cancelButton
+                    thirdLabel, thirdInput, badgeLabel, badgeScale, borderLabel,
+                    fadeDuration, magnifier, note, saveButton, cancelButton
                 });
                 dialog.AcceptButton = saveButton;
                 dialog.CancelButton = cancelButton;
@@ -211,7 +273,9 @@ namespace RScreenRec
             foreach (string path in Directory.GetFiles(directory, "*.lnk"))
             {
                 if (string.Equals(path, firstPath, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(path, secondPath, StringComparison.OrdinalIgnoreCase))
+                    string.Equals(path, secondPath, StringComparison.OrdinalIgnoreCase) ||
+                    Path.GetFileNameWithoutExtension(path).StartsWith(app + " - ",
+                        StringComparison.OrdinalIgnoreCase))
                     continue;
                 string hotkey = ReadHotkeyFromFile(path);
                 if (!string.IsNullOrEmpty(hotkey) &&
