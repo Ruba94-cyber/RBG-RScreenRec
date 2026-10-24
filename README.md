@@ -89,6 +89,8 @@ The H.264 profile preserves a 30 FPS output timeline and does not deliberately r
 
 Run `scripts/test-windows-smoke.ps1` in an interactive Windows session. It also validates a pause/resume case by checking the resulting MP4 duration and full decoding. It builds the Release app, automates the window picker against a separate synthetic process, exercises odd-landscape, portrait, and panoramic WGC capture, checks occlusion, resize, minimize/restore, selected-window closure, and validates every MP4 with FFmpeg. It also writes a synthetic timeline longer than one hour. The test runner requires the .NET Framework C# compiler plus `ffmpeg.exe` and `ffprobe.exe` on `PATH`; these are development tools and are not shipped with RScreenRec. Successful runs remove their temporary media, while failed runs retain the artifacts for diagnosis.
 
+Additional FlaUI coverage in `tests/RScreenRec.SettingsUiAutomation.csproj` and `tests/RScreenRec.ExecutableSmokeAutomation.csproj` checks opening Settings, saving and reopening shortcut assignments, launcher links, REC badge dragging and position persistence, capture exclusion, and the executable's pause/resume recording flow. These UI checks do not establish Explorer hotkey activation across Explorer or Windows restarts, or multi-monitor and DPI behavior on other hardware.
+
 ### File Naming
 Files follow the pattern `rec_[timestamp].mp4`:
 - **timestamp**: Uses the format `yyyy-MM-dd_HH-mm-ss-fff`.
