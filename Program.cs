@@ -22,6 +22,7 @@ namespace RScreenRec
 
         private const string InstanceMutexName = @"Local\RScreenRec_SingleInstance";
         private const string StopEventName = @"Local\RScreenRec_StopEvent";
+        private const string PauseEventName = @"Local\RScreenRec_PauseEvent";
         private static readonly string StopRequestPath = Path.Combine(Path.GetTempPath(), "RScreenRec_" + Environment.UserName + "_" + Process.GetCurrentProcess().SessionId + ".stop");
 
         [DllImport("user32.dll")]
@@ -45,6 +46,12 @@ namespace RScreenRec
             ConfigureDpiAwareness();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            if (HasArgument(args, "--toggle-pause"))
+            {
+                SignalPause();
+                return;
+            }
 
             bool forceWindow = HasArgument(args, "--record-window");
             bool forceScreen = HasArgument(args, "--record-screen");
@@ -77,6 +84,8 @@ namespace RScreenRec
                     out createdNewStopEvent))
                 {
                     stopEvent.Reset();
+                    using (var pauseEvent = new EventWaitHandle(false, EventResetMode.AutoReset, PauseEventName))
+                    {
                     TryDeleteStopRequest();
 
                     IntPtr selectedWindow = IntPtr.Zero;
@@ -154,6 +163,11 @@ namespace RScreenRec
                             stopRequested = true;
                             break;
                         }
+                        if (pauseEvent.WaitOne(0))
+                        {
+                            bool paused = recorder.TogglePause();
+                            if (recordingOverlay != null) recordingOverlay.SetPaused(paused);
+                        }
                     }
 
                     if (stopRequested)
@@ -177,6 +191,7 @@ namespace RScreenRec
                     TryDeleteStopRequest();
                     if (recordingOverlay != null) recordingOverlay.Dispose();
                     if (touchOverlay != null) touchOverlay.Dispose();
+                    }
                 }
             }
         }
@@ -197,6 +212,23 @@ namespace RScreenRec
             }
 
             return Path.Combine(folder, "rec_" + timestamp + "_" + Guid.NewGuid().ToString("N") + ".mp4");
+        }
+
+        private static void SignalPause()
+        {
+            try
+            {
+                using (var pauseEvent = EventWaitHandle.OpenExisting(PauseEventName))
+                    pauseEvent.Set();
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // Pausing is meaningful only when an existing recording is active.
+            }
+            catch (Exception ex)
+            {
+                Logger.Log("Could not toggle recording pause state.", ex);
+            }
         }
 
         private static void SignalStop()
@@ -317,6 +349,23 @@ namespace RScreenRec
                 var host = new OverlayHost(name, formFactory);
                 host.Start();
                 return host;
+            }
+
+            public void SetPaused(bool paused)
+            {
+                Form current = form;
+                if (current == null) return;
+                try
+                {
+                    if (!current.IsDisposed && current.IsHandleCreated)
+                        current.BeginInvoke(new Action(() =>
+                        {
+                            RecordingOverlayForm indicator = current as RecordingOverlayForm;
+                            if (indicator != null) indicator.SetPaused(paused);
+                        }));
+                }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
             }
 
             public void CloseNow()
