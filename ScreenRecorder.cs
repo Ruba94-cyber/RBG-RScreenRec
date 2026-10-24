@@ -322,7 +322,14 @@ namespace RScreenRec
                             DrawTouchPointers(graphics, captureBounds, dpiScale);
                         }
 
-                        byte[] frame = BitmapToRgb32TopDownPadded(bitmap, outputWidth, outputHeight);
+                        // Window frames are unchanged when minimized or when WGC has
+                        // not delivered a new frame. Reuse the already-converted
+                        // RGB32 buffer rather than copying millions of pixels again.
+                        // Desktop mode always converts because cursor/touch overlays can change.
+                        byte[] frame = window != IntPtr.Zero &&
+                            captureStatus == FrameCaptureStatus.Repeated && frameIndex > 0
+                            ? frameBuffer
+                            : BitmapToRgb32TopDownPadded(bitmap, outputWidth, outputHeight);
                         WriteFrame(writer, frame, frame.Length, frameIndex, ref firstFrameSignaled);
                         frameIndex++;
 
