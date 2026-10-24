@@ -88,10 +88,35 @@ namespace RScreenRec
                         return;
                     }
 
+                    string conflict = FindShortcutConflict(applicationName, firstMode, first, secondMode, second);
+                    if (conflict != null)
+                    {
+                        MessageBox.Show(dialog, conflict, applicationName,
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
                     try
                     {
-                        SaveShortcut(applicationName, firstMode, firstArgument, first);
-                        SaveShortcut(applicationName, secondMode, secondArgument, second);
+                        string previousFirst = ReadShortcut(applicationName, firstMode);
+                        string previousSecond = ReadShortcut(applicationName, secondMode);
+                        try
+                        {
+                            SaveShortcut(applicationName, firstMode, firstArgument, first);
+                            SaveShortcut(applicationName, secondMode, secondArgument, second);
+                            if (!MatchesShortcut(ReadShortcut(applicationName, firstMode), first) ||
+                                !MatchesShortcut(ReadShortcut(applicationName, secondMode), second))
+                                throw new IOException("Windows did not persist the requested shortcut keys.");
+                        }
+                        catch
+                        {
+                            // Do not leave one of two mode shortcuts modified after a partial failure.
+                            try { SaveShortcut(applicationName, firstMode, firstArgument, previousFirst ?? ""); }
+                            catch (Exception restoreError) { System.Diagnostics.Debug.WriteLine(restoreError); }
+                            try { SaveShortcut(applicationName, secondMode, secondArgument, previousSecond ?? ""); }
+                            catch (Exception restoreError) { System.Diagnostics.Debug.WriteLine(restoreError); }
+                            throw;
+                        }
                         dialog.DialogResult = DialogResult.OK;
                         dialog.Close();
                     }
@@ -152,13 +177,67 @@ namespace RScreenRec
 
         private static string GetShortcutPath(string applicationName, string mode)
         {
-            string root = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            string root = Environment.GetEnvironmentVariable("RBG_SHORTCUT_TEST_ROOT");
+            if (string.IsNullOrWhiteSpace(root))
+                root = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
             if (string.IsNullOrEmpty(root))
                 throw new InvalidOperationException("The current user's Start Menu was not found.");
 
             // Names are fixed by callers; never take arbitrary file paths from user input.
             return Path.Combine(root, ShortcutFolderName,
                 applicationName + " - " + mode + ".lnk");
+        }
+
+        private static bool MatchesShortcut(string persisted, string requested)
+        {
+            return string.Equals((persisted ?? "").Trim(), (requested ?? "").Trim(),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Detect conflicts within both RBG utilities. Explorer and other software can still
+        // reserve keys independently; Windows does not expose a reliable universal lookup.
+        private static string FindShortcutConflict(string app, string firstMode, string first,
+            string secondMode, string second)
+        {
+            string directory = Path.GetDirectoryName(GetShortcutPath(app, firstMode));
+            if (!Directory.Exists(directory))
+                return null;
+            string firstPath = GetShortcutPath(app, firstMode);
+            string secondPath = GetShortcutPath(app, secondMode);
+            foreach (string path in Directory.GetFiles(directory, "*.lnk"))
+            {
+                if (string.Equals(path, firstPath, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(path, secondPath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string hotkey = ReadHotkeyFromFile(path);
+                if (!string.IsNullOrEmpty(hotkey) &&
+                    (MatchesShortcut(hotkey, first) || MatchesShortcut(hotkey, second)))
+                {
+                    return "That shortcut is already assigned to " +
+                        Path.GetFileNameWithoutExtension(path) + ". Choose another combination.";
+                }
+            }
+            return null;
+        }
+
+        private static string ReadHotkeyFromFile(string path)
+        {
+            object shell = null;
+            object shortcut = null;
+            try
+            {
+                Type type = Type.GetTypeFromProgID("WScript.Shell");
+                if (type == null) return null;
+                shell = Activator.CreateInstance(type);
+                shortcut = ((dynamic)shell).CreateShortcut(path);
+                return (string)((dynamic)shortcut).Hotkey;
+            }
+            catch (Exception) { return null; }
+            finally
+            {
+                ReleaseComObject(shortcut);
+                ReleaseComObject(shell);
+            }
         }
 
         private static string ReadShortcut(string applicationName, string mode)
