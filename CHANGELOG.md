@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — keyboard controls, user experience, and reliability
+
+- Add Windows Explorer-backed, configurable per-user hotkeys for screen, window, and pause/resume modes without idle background processes.
+- Verify persisted hotkeys, detect conflicts across RBG utilities, and roll back partially written shortcuts.
+- Implement a pausable 30 FPS MP4 timeline and an amber paused-state badge.
+- Reduce and make the REC badge draggable with remembered position and user-adjustable scale; log failures when exclusion from capture is unavailable.
+- Improve window selection with title search and click-to-select; use effective per-monitor DPI for overlay positioning.
+- Reuse RGB32 pixel buffers when window capture repeats the previous frame, avoiding redundant conversion.
+- Add isolated Windows shortcut and settings tests and a pause/resume case in the interactive MP4 smoke suite.
+
+
 ## 1.2.0
 
 - Added opt-in selected-window recording with Windows Graphics Capture and a warned PrintWindow compatibility fallback.
