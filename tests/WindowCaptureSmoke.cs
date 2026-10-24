@@ -142,9 +142,11 @@ internal static class WindowCaptureSmoke
     private static int Main(string[] args)
     {
         if (args.Length < 4 || args.Length > 5 ||
-            (args.Length == 5 && !string.Equals(args[4], "close", StringComparison.OrdinalIgnoreCase)))
+            (args.Length == 5 &&
+                !string.Equals(args[4], "close", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(args[4], "pause", StringComparison.OrdinalIgnoreCase)))
         {
-            Console.Error.WriteLine("Usage: WindowCaptureSmoke <output.mp4> <width> <height> <duration-seconds> [close]");
+            Console.Error.WriteLine("Usage: WindowCaptureSmoke <output.mp4> <width> <height> <duration-seconds> [close|pause]");
             return 2;
         }
 
@@ -153,6 +155,7 @@ internal static class WindowCaptureSmoke
         int height = int.Parse(args[2]);
         int durationSeconds = int.Parse(args[3]);
         bool closeTargetScenario = args.Length == 5 && string.Equals(args[4], "close", StringComparison.OrdinalIgnoreCase);
+        bool pauseScenario = args.Length == 5 && string.Equals(args[4], "pause", StringComparison.OrdinalIgnoreCase);
         Directory.CreateDirectory(Path.GetDirectoryName(path));
 
         try { SetProcessDpiAwarenessContext(new IntPtr(-4)); }
@@ -196,6 +199,8 @@ internal static class WindowCaptureSmoke
             bool recordingStopped = false;
             bool targetCloseRequested = false;
             bool sourceCloseReported = false;
+            bool pausedOnce = false;
+            bool resumedOnce = false;
             Exception failure = null;
             Stopwatch duration = new Stopwatch();
             IntPtr selectedWindow = SelectTestWindow(targetWindow);
@@ -211,6 +216,19 @@ internal static class WindowCaptureSmoke
                     try
                     {
                         ticks++;
+                        if (pauseScenario && !pausedOnce && duration.Elapsed >= TimeSpan.FromSeconds(1))
+                        {
+                            if (!recorder.TogglePause() || !recorder.IsPaused)
+                                throw new InvalidOperationException("Pause did not become active.");
+                            pausedOnce = true;
+                        }
+                        if (pauseScenario && pausedOnce && !resumedOnce &&
+                            duration.Elapsed >= TimeSpan.FromSeconds(2))
+                        {
+                            if (recorder.TogglePause() || recorder.IsPaused)
+                                throw new InvalidOperationException("Resume did not clear the pause state.");
+                            resumedOnce = true;
+                        }
                         if (ticks == 8)
                         {
                             NativeRect bounds;
@@ -296,6 +314,8 @@ internal static class WindowCaptureSmoke
                 return 3;
             if (closeTargetScenario && !sourceCloseReported)
                 return 6;
+            if (pauseScenario && !(pausedOnce && resumedOnce))
+                return 7;
             return recordingStarted && recordingStopped && File.Exists(path) && new FileInfo(path).Length > 0 ? 0 : 4;
         }
         catch (Exception ex)
