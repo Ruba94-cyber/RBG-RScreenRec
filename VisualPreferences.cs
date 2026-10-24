@@ -11,8 +11,10 @@ namespace RScreenRec
         {
             get
             {
-                return Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                string root = Environment.GetEnvironmentVariable("RBG_VISUAL_SETTINGS_TEST_ROOT");
+                if (string.IsNullOrWhiteSpace(root))
+                    root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                return Path.Combine(root,
                     "RBG", "RScreenRec", "preferences.ini");
             }
         }
