@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path $env:TEMP ('RBG-shortcut-test-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root | Out-Null
 $env:RBG_SHORTCUT_TEST_ROOT = $root
+$env:RBG_VISUAL_SETTINGS_TEST_ROOT = $root
 try {
     Add-Type -AssemblyName System.Windows.Forms
     $assembly = [Reflection.Assembly]::LoadFrom((Resolve-Path -LiteralPath $Executable).Path)
@@ -49,9 +50,25 @@ try {
     if ($null -ne $read.Invoke($null, @($ApplicationName, $modeA))) {
         throw 'Cleared shortcut still exists.'
     }
-    Write-Host 'Shortcut settings smoke tests passed.'
+    $visualType = $assembly.GetType("$Namespace.VisualPreferences", $true)
+    $visualFlags = [Reflection.BindingFlags]::Public -bor [Reflection.BindingFlags]::Static
+    $settingName = if ($Namespace -eq 'RScreenRec') { 'BadgeSizePercent' } else { 'BorderFadeDurationMs' }
+    $settingValue = if ($Namespace -eq 'RScreenRec') { 115 } else { 320 }
+    $setting = $visualType.GetProperty($settingName, $visualFlags)
+    if ($null -eq $setting) { throw "Visual preference missing: $settingName" }
+    $setting.SetValue($null, $settingValue, $null)
+    if ([int]$setting.GetValue($null, $null) -ne $settingValue) {
+        throw "Visual preference did not roundtrip: $settingName"
+    }
+    if ($Namespace -eq 'RScreenFlash') {
+        $zoomSetting = $visualType.GetProperty('SelectionMagnifierEnabled', $visualFlags)
+        $zoomSetting.SetValue($null, $true, $null)
+        if (-not [bool]$zoomSetting.GetValue($null, $null)) { throw 'Magnifier preference did not persist.' }
+    }
+    Write-Host 'Shortcut settings and visual preferences smoke tests passed.'
 }
 finally {
     Remove-Item Env:\RBG_SHORTCUT_TEST_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:\RBG_VISUAL_SETTINGS_TEST_ROOT -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
