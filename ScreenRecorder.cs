@@ -24,6 +24,9 @@ namespace RScreenRec
         private string windowCaptureBackend;
         private byte[] frameBuffer;
         private bool isRecording;
+        private bool isPaused;
+        private long pausedAtTicks;
+        private long pausedTotalTicks;
         private string outputPath;
         private int encodedWidth;
         private int encodedHeight;
@@ -99,6 +102,9 @@ namespace RScreenRec
                 repeatedSourceFrames = 0;
                 recordingError = null;
                 recordingStopwatch = Stopwatch.StartNew();
+                isPaused = false;
+                pausedAtTicks = 0;
+                pausedTotalTicks = 0;
                 isRecording = true;
             }
 
@@ -240,6 +246,47 @@ namespace RScreenRec
                 throw new InvalidOperationException("Recording failed while finalizing.", error);
         }
 
+        /// <summary>
+        /// Pauses encoding without introducing a gap in the MP4 timeline.
+        /// The capture worker remains alive; no additional process is required.
+        /// Returns the new pause state.
+        /// </summary>
+        public bool TogglePause()
+        {
+            lock (recordingLock)
+            {
+                if (!isRecording || recordingStopwatch == null)
+                    return false;
+                long now = recordingStopwatch.ElapsedTicks;
+                if (isPaused)
+                {
+                    pausedTotalTicks += Math.Max(0, now - pausedAtTicks);
+                    isPaused = false;
+                }
+                else
+                {
+                    pausedAtTicks = now;
+                    isPaused = true;
+                }
+                Logger.Log(isPaused ? "Recording paused." : "Recording resumed.");
+                return isPaused;
+            }
+        }
+
+        public bool IsPaused
+        {
+            get { lock (recordingLock) return isPaused; }
+        }
+
+        private long ActiveElapsedTicks(Stopwatch stopwatch)
+        {
+            lock (recordingLock)
+            {
+                long end = isPaused ? pausedAtTicks : stopwatch.ElapsedTicks;
+                return Math.Max(0, end - pausedTotalTicks);
+            }
+        }
+
         public bool IsRecording
         {
             get
@@ -297,9 +344,11 @@ namespace RScreenRec
                 {
                     while (IsRecording)
                     {
-                        SleepUntil(stopwatch, frameIndex * frameIntervalTicks);
+                        SleepUntilActive(stopwatch, frameIndex * frameIntervalTicks);
                         if (!IsRecording)
                             break;
+                        if (IsPaused)
+                            continue;
 
                         FrameCaptureStatus captureStatus;
                         try
@@ -333,7 +382,7 @@ namespace RScreenRec
                         WriteFrame(writer, frame, frame.Length, frameIndex, ref firstFrameSignaled);
                         frameIndex++;
 
-                        long expectedFrameCount = Math.Max(frameIndex, stopwatch.ElapsedTicks / frameIntervalTicks);
+                        long expectedFrameCount = Math.Max(frameIndex, ActiveElapsedTicks(stopwatch) / frameIntervalTicks);
                         int catchUpFrames = 0;
                         while (frameIndex < expectedFrameCount &&
                                catchUpFrames < MaxCatchUpFramesPerCycle &&
@@ -393,11 +442,16 @@ namespace RScreenRec
             }
         }
 
-        private static void SleepUntil(Stopwatch stopwatch, long targetTicks)
+        private void SleepUntilActive(Stopwatch stopwatch, long targetTicks)
         {
-            while (true)
+            while (IsRecording)
             {
-                long remainingTicks = targetTicks - stopwatch.ElapsedTicks;
+                if (IsPaused)
+                {
+                    Thread.Sleep(15);
+                    continue;
+                }
+                long remainingTicks = targetTicks - ActiveElapsedTicks(stopwatch);
                 if (remainingTicks <= 0)
                     return;
 
