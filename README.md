@@ -55,6 +55,20 @@ Windows release packages are unsigned because no Authenticode certificate is ava
 3. Continue using other applications; window mode captures only the selected window and does not use desktop capture as a fallback.
 4. Launch `RBG - RScreenRec.exe` again to stop and finalize the MP4.
 
+### Configurable keyboard shortcuts (no background process)
+
+Hold **Ctrl+Shift while launching the executable** to open Shortcut Settings.
+Choose separate combinations for **screen recording** and **window recording**.
+The suggested defaults are `Ctrl+Alt+R` and `Ctrl+Alt+W`, but no hotkey is installed until you click **Save shortcuts**.
+
+- Click a shortcut box and press **Ctrl+Alt+letter** or **Ctrl+Alt+F1–F12** (optionally with Shift).
+- Press **Delete** to clear a shortcut, then save to remove its Windows link.
+- The application creates per-user Start Menu shortcuts in `RBG Utilities`. Windows Explorer handles their hotkeys, so no RScreenRec process needs to remain running between recordings. Explorer must be running, shortcut registration may take a moment, and other applications/Windows may reserve combinations.
+- If you move or rename the executable, reopen settings from its new location and save again.
+- The original direct-executable behavior remains unchanged: normal launch starts/stops screen recording, Shift+launch requests window capture, and Ctrl+Shift+launch opens settings. The two hotkeys launch the respective modes; when a recording is already active, either launch stops it.
+
+**REC badge:** A smaller blinking REC badge appears during screen and window recording. Drag the badge with the mouse to move it; its position is saved in your user profile. The app asks Windows to exclude the indicator from captures when supported, but exclusion is dependent on the Windows version and capture backend.
+
 ### Release download
 
 Download `RBG-RScreenRec-1.2.0-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`.
