@@ -59,6 +59,7 @@
     <Compile Include="ScreenRecorder.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ShortcutSettings.cs" />
+    <Compile Include="VisualPreferences.cs" />
     <Compile Include="WindowPicker.cs" />
     <Compile Include="FrameSources.cs" />
   </ItemGroup>
