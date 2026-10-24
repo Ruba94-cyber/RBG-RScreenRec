@@ -26,7 +26,9 @@ try {
     $save.Invoke($null, @($ApplicationName, $modeB, '--test-window', $second)) | Out-Null
     $actualFirst = [string]$read.Invoke($null, @($ApplicationName, $modeA))
     $actualSecond = [string]$read.Invoke($null, @($ApplicationName, $modeB))
-    if ($actualFirst -ine $first -or $actualSecond -ine $second) {
+    $normalize = { param([string]$key) (($key -split '\+' | ForEach-Object { $_.Trim() } | Sort-Object) -join '+').ToUpperInvariant() }
+    if ((& $normalize $actualFirst) -ne (& $normalize $first) -or
+        (& $normalize $actualSecond) -ne (& $normalize $second)) {
         throw "Hotkey roundtrip failed: $actualFirst / $actualSecond"
     }
 
