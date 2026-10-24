@@ -78,11 +78,9 @@ namespace RScreenRec
                 pick.Size = new Size(168, 30);
                 pick.Click += (sender, args) =>
                 {
-                    dialog.Hide();
                     IntPtr selected = PickWindowByClick();
                     if (selected == IntPtr.Zero)
                     {
-                        dialog.Show();
                         dialog.Activate();
                         return;
                     }
