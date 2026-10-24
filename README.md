@@ -55,6 +55,28 @@ Windows release packages are unsigned because no Authenticode certificate is ava
 3. Continue using other applications; window mode captures only the selected window and does not use desktop capture as a fallback.
 4. Launch `RBG - RScreenRec.exe` again to stop and finalize the MP4.
 
+### Configurable keyboard shortcuts (no background process)
+
+Hold **Ctrl+Shift while launching the executable** to open Shortcut Settings.
+Choose separate combinations for **screen recording** and **window recording**.
+The suggested defaults are `Ctrl+Alt+R` (screen), `Ctrl+Alt+W` (window), and `Ctrl+Alt+P` (pause/resume). No hotkey is installed until you click **Save settings**.
+
+- Click a shortcut box and press **Ctrl+Alt+letter** or **Ctrl+Alt+F1–F12** (optionally with Shift).
+- Press **Delete** to clear a shortcut, then save to remove its Windows link.
+- The application creates per-user Start Menu shortcuts in `RBG Utilities`. Windows Explorer handles hotkeys, so no RScreenRec process needs to remain running between recordings. The settings dialog checks collisions between both RBG utilities, but Windows and unrelated applications may still reserve combinations. Explorer must be running and shortcut registration can take a moment.
+- If you move or rename the executable, reopen settings from its new location and save again.
+- The original direct-executable behavior remains unchanged: normal launch starts/stops screen recording, Shift+launch requests window capture, and Ctrl+Shift+launch opens settings. The two hotkeys launch the respective modes; when a recording is already active, either launch stops it.
+
+**REC badge:** A smaller blinking REC badge appears during screen and window recording. Drag the badge to move it; its position persists across launches. Adjust its size (70–130%) in settings. When paused, an amber PAUSE label replaces the blinking REC indicator. The app asks Windows to exclude the indicator from captures when supported, but exclusion is dependent on the Windows version and capture backend.
+
+### Pause and resume
+
+The optional pause shortcut (suggested `Ctrl+Alt+P`) toggles pause/resume during an active recording, using a lightweight Windows event. The MP4 timeline excludes the pause interval, so playback does not contain a long frozen pause. The recorder remains open during pauses and the existing second-launch behavior still stops and finalizes the video. The explicit `--toggle-pause` argument does nothing if no recording is running.
+
+### Improved window picker
+
+Type part of a window title to filter the list, or choose **Click a window...** and click the target directly. Restore minimized targets before starting capture. After recording begins, minimize/restore is handled according to the Windows Graphics Capture or PrintWindow limitations explained below.
+
 ### Release download
 
 Download `RBG-RScreenRec-1.2.0-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`.
@@ -65,7 +87,7 @@ The H.264 profile preserves a 30 FPS output timeline and does not deliberately r
 
 ### Windows smoke tests
 
-Run `scripts/test-windows-smoke.ps1` in an interactive Windows session. It builds the Release app, automates the window picker against a separate synthetic process, exercises odd-landscape, portrait, and panoramic WGC capture, checks occlusion, resize, minimize/restore, selected-window closure, and validates every MP4 with FFmpeg. It also writes a synthetic timeline longer than one hour. The test runner requires the .NET Framework C# compiler plus `ffmpeg.exe` and `ffprobe.exe` on `PATH`; these are development tools and are not shipped with RScreenRec. Successful runs remove their temporary media, while failed runs retain the artifacts for diagnosis.
+Run `scripts/test-windows-smoke.ps1` in an interactive Windows session. It also validates a pause/resume case by checking the resulting MP4 duration and full decoding. It builds the Release app, automates the window picker against a separate synthetic process, exercises odd-landscape, portrait, and panoramic WGC capture, checks occlusion, resize, minimize/restore, selected-window closure, and validates every MP4 with FFmpeg. It also writes a synthetic timeline longer than one hour. The test runner requires the .NET Framework C# compiler plus `ffmpeg.exe` and `ffprobe.exe` on `PATH`; these are development tools and are not shipped with RScreenRec. Successful runs remove their temporary media, while failed runs retain the artifacts for diagnosis.
 
 ### File Naming
 Files follow the pattern `rec_[timestamp].mp4`:
@@ -116,9 +138,9 @@ Example: `rec_2026-06-04_16-22-40-234.mp4`
 - **Buffer size**: Automatically determined from the selected capture dimensions.
 
 ### Overlay Customization
-- **Indicator position**: Configurable in `RecordingOverlayForm.cs` near lines 19-20.
+- **Indicator position**: Drag the REC badge; saved per-user and constrained to visible monitors.
 - **Colors**: Modify the overlay classes to adjust colors.
-- **Sizes**: Change constructor parameters to tweak overlay dimensions.
+- **Sizes**: REC badge size is adjustable in the built-in Ctrl+Shift settings dialog.
 
 ## Troubleshooting
 

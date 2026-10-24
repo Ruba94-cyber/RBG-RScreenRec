@@ -13,6 +13,20 @@ namespace RScreenRec
         [DllImport("user32.dll")]
         private static extern IntPtr GetDesktopWindow();
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NativePoint
+        {
+            public int X;
+            public int Y;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromPoint(NativePoint point, uint flags);
+
+        [DllImport("shcore.dll")]
+        private static extern int GetDpiForMonitor(IntPtr monitor, int dpiType,
+            out uint dpiX, out uint dpiY);
+
         private const int DEFAULT_DPI = 96;
 
         public static float GetSystemDpiScale()
@@ -35,18 +49,26 @@ namespace RScreenRec
 
         public static float GetScreenDpiScale(Screen screen)
         {
+            if (screen == null)
+                return GetSystemDpiScale();
             try
             {
-                // Windows 10+ can report different DPI values per monitor
-                using (Graphics g = Graphics.FromHwnd(IntPtr.Zero))
+                var bounds = screen.Bounds;
+                var center = new NativePoint
                 {
-                    return g.DpiX / DEFAULT_DPI;
-                }
+                    X = bounds.Left + bounds.Width / 2,
+                    Y = bounds.Top + bounds.Height / 2
+                };
+                IntPtr monitor = MonitorFromPoint(center, 2); // MONITOR_DEFAULTTONEAREST
+                uint x, y;
+                if (monitor != IntPtr.Zero && GetDpiForMonitor(monitor, 0, out x, out y) == 0 &&
+                    x >= DEFAULT_DPI / 2 && x <= DEFAULT_DPI * 6)
+                    return x / (float)DEFAULT_DPI;
             }
-            catch
-            {
-                return 1.0f;
-            }
+            catch (EntryPointNotFoundException) { }
+            catch (DllNotFoundException) { }
+            catch (Exception) { }
+            return GetSystemDpiScale();
         }
 
         public static int ScaleValue(int value, float scale)

@@ -108,6 +108,30 @@ try {
         }
     }
 
+    $pausedVideo = Join-Path $testRoot 'paused-window.mp4'
+    $pausedOutput = & $windowHarness $pausedVideo 671 377 5 pause 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Pause/resume test failed: $($pausedOutput -join ' ')" }
+    $pausedProbeJson = & $ffprobe.Source -v error -show_entries 'format=duration' -of json $pausedVideo
+    if ($LASTEXITCODE -ne 0) { throw 'ffprobe could not inspect the paused MP4.' }
+    $pausedProbe = ($pausedProbeJson -join [Environment]::NewLine) | ConvertFrom-Json
+    $effectiveDuration = [double]::Parse([string]$pausedProbe.format.duration, [Globalization.CultureInfo]::InvariantCulture)
+    if ($effectiveDuration -lt 3.4 -or $effectiveDuration -gt 4.8) {
+        throw "Paused timeline has an unexpected duration: $effectiveDuration seconds; expected about 4 seconds."
+    }
+    & $ffmpeg.Source -v error -xerror -i $pausedVideo -f null NUL
+    if ($LASTEXITCODE -ne 0) { throw 'Paused/resumed MP4 could not fully decode.' }
+    $results += [pscustomobject]@{
+        Test = 'pause-resume'
+        Backend = 'Windows Graphics Capture'
+        SizeBytes = [int64](Get-Item -LiteralPath $pausedVideo).Length
+        Encoded = '671x377 padded'
+        FPS = '30/1'
+        Frames = 'validated via duration'
+        DurationSeconds = $effectiveDuration
+        FullDecode = 'ok'
+        OcclusionAndRestore = 'not-applicable'
+    }
+
     $closedVideo = Join-Path $testRoot 'closed-window.mp4'
     $closeOutput = & $windowHarness $closedVideo 671 377 2 close 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Closing the selected window failed: $($closeOutput -join ' ')" }

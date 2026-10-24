@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -10,24 +12,33 @@ namespace RScreenRec
     {
         private readonly Timer blinkTimer;
         private bool blinkOn = true;
+        private bool paused;
         private readonly float dpiScale;
+        private bool dragging;
+        private Point dragStartCursor;
+        private Point dragStartWindow;
 
         public RecordingOverlayForm(Rectangle screenBounds)
         {
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
 
-            dpiScale = DpiHelper.GetSystemDpiScale();
-            int scaledOffsetY = DpiHelper.ScaleValue(80, dpiScale);
-            int scaledOffsetX = DpiHelper.ScaleValue(40, dpiScale);
-            int scaledWidth = DpiHelper.ScaleValue(110, dpiScale);
-            int scaledHeight = DpiHelper.ScaleValue(34, dpiScale);
+            dpiScale = DpiHelper.GetScreenDpiScale(Screen.FromRectangle(screenBounds)) *
+                (VisualPreferences.BadgeSizePercent / 100f);
+            int scaledOffsetY = DpiHelper.ScaleValue(66, dpiScale);
+            int scaledOffsetX = DpiHelper.ScaleValue(32, dpiScale);
+            int scaledWidth = DpiHelper.ScaleValue(94, dpiScale);
+            int scaledHeight = DpiHelper.ScaleValue(29, dpiScale);
 
-            Location = new Point(
+            Size = new Size(scaledWidth, scaledHeight);
+            Point defaultLocation = new Point(
                 screenBounds.Right - scaledWidth - scaledOffsetX,
                 screenBounds.Bottom - scaledHeight - scaledOffsetY
             );
-            Size = new Size(scaledWidth, scaledHeight);
+            Point? savedLocation = ReadSavedPosition();
+            Location = savedLocation.HasValue
+                ? EnsureVisible(savedLocation.Value, Size, defaultLocation)
+                : defaultLocation;
             TopMost = true;
             ShowInTaskbar = false;
             BackColor = Color.Magenta;
@@ -45,19 +56,26 @@ namespace RScreenRec
             blinkTimer = new Timer { Interval = 520 };
             blinkTimer.Tick += (s, e) =>
             {
+                // Keep the indicator draggable even while the dot blinks.
                 blinkOn = !blinkOn;
-                if (blinkOn)
-                {
-                    Show();
-                    ForceOnTop(Handle);
-                    Invalidate();
-                }
-                else
-                {
-                    Hide();
-                }
+                Invalidate();
             };
             Shown += (s, e) => blinkTimer.Start();
+        }
+
+        public void SetPaused(bool value)
+        {
+            paused = value;
+            if (paused)
+            {
+                blinkTimer.Stop();
+                blinkOn = true;
+            }
+            else if (Visible)
+            {
+                blinkTimer.Start();
+            }
+            Invalidate();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -65,8 +83,8 @@ namespace RScreenRec
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
-            int padding = DpiHelper.ScaleValue(8, dpiScale);
-            int cornerRadius = DpiHelper.ScaleValue(10, dpiScale);
+            int padding = DpiHelper.ScaleValue(7, dpiScale);
+            int cornerRadius = DpiHelper.ScaleValue(9, dpiScale);
 
             Rectangle pillRect = new Rectangle(0, 0, Width - 1, Height - 1);
             Rectangle shadowRect = pillRect;
@@ -90,12 +108,12 @@ namespace RScreenRec
                 e.Graphics.DrawPath(borderPen, pillPath);
             }
 
-            int baseDotSize = DpiHelper.ScaleValue(12, dpiScale);
+            int baseDotSize = DpiHelper.ScaleValue(10, dpiScale);
             int dotSize = baseDotSize;
             int dotX = padding;
             int dotY = (Height - dotSize) / 2;
 
-            int glowSize = dotSize + DpiHelper.ScaleValue(8, dpiScale);
+            int glowSize = dotSize + DpiHelper.ScaleValue(6, dpiScale);
             Rectangle glowRect = new Rectangle(
                 dotX - (glowSize - dotSize) / 2,
                 (Height - glowSize) / 2,
@@ -103,8 +121,11 @@ namespace RScreenRec
                 glowSize);
 
             Rectangle dotRect = new Rectangle(dotX, dotY, dotSize, dotSize);
-            using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(180, 255, 56, 56)))
-            using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(255, 255, 35, 35)))
+            Color dotColor = paused ? Color.FromArgb(255, 235, 173, 38)
+                : (blinkOn ? Color.FromArgb(255, 255, 35, 35) : Color.FromArgb(130, 160, 60, 60));
+            using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb(blinkOn ? 180 : 25,
+                       dotColor.R, dotColor.G, dotColor.B)))
+            using (SolidBrush dotBrush = new SolidBrush(dotColor))
             {
                 e.Graphics.FillEllipse(glowBrush, glowRect);
                 e.Graphics.FillEllipse(dotBrush, dotRect);
@@ -121,16 +142,123 @@ namespace RScreenRec
                 e.Graphics.FillEllipse(highlightBrush, highlightRect);
             }
 
-            string label = "REC";
-            float fontSize = DpiHelper.ScaleValue(11, dpiScale);
+            string label = paused ? "PAUSE" : "REC";
+            float fontSize = DpiHelper.ScaleValue(10, dpiScale);
             using (Font font = new Font("Segoe UI Semibold", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
             using (SolidBrush textBrush = new SolidBrush(Color.White))
             {
                 SizeF textSize = e.Graphics.MeasureString(label, font);
-                float textX = dotRect.Right + DpiHelper.ScaleValue(8, dpiScale);
+                float textX = dotRect.Right + DpiHelper.ScaleValue(7, dpiScale);
                 float textY = (Height - textSize.Height) / 2;
                 e.Graphics.DrawString(label, font, textBrush, textX, textY);
             }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left)
+                return;
+
+            dragging = true;
+            dragStartCursor = Cursor.Position;
+            dragStartWindow = Location;
+            Capture = true;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (!dragging)
+                return;
+
+            Point current = Cursor.Position;
+            Screen screen = Screen.FromPoint(current);
+            Rectangle area = screen.WorkingArea;
+            Point wanted = new Point(
+                dragStartWindow.X + current.X - dragStartCursor.X,
+                dragStartWindow.Y + current.Y - dragStartCursor.Y);
+            Location = new Point(
+                Math.Max(area.Left, Math.Min(wanted.X, area.Right - Width)),
+                Math.Max(area.Top, Math.Min(wanted.Y, area.Bottom - Height)));
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (e.Button != MouseButtons.Left || !dragging)
+                return;
+
+            dragging = false;
+            Capture = false;
+            SavePosition(Location);
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            if (dragging)
+            {
+                dragging = false;
+                SavePosition(Location);
+            }
+        }
+
+        private static string PositionFile
+        {
+            get
+            {
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "RBG", "RScreenRec", "overlay-position.txt");
+            }
+        }
+
+        private static Point? ReadSavedPosition()
+        {
+            try
+            {
+                if (!File.Exists(PositionFile))
+                    return null;
+
+                string[] coordinates = File.ReadAllText(PositionFile).Split(',');
+                int x, y;
+                if (coordinates.Length == 2 &&
+                    int.TryParse(coordinates[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out x) &&
+                    int.TryParse(coordinates[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out y))
+                    return new Point(x, y);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return null;
+        }
+
+        private static void SavePosition(Point position)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(PositionFile));
+                File.WriteAllText(PositionFile,
+                    position.X.ToString(CultureInfo.InvariantCulture) + "," +
+                    position.Y.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+
+        private static Point EnsureVisible(Point position, Size size, Point fallback)
+        {
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                Rectangle work = screen.WorkingArea;
+                if (work.IntersectsWith(new Rectangle(position, size)))
+                {
+                    return new Point(
+                        Math.Max(work.Left, Math.Min(position.X, work.Right - size.Width)),
+                        Math.Max(work.Top, Math.Min(position.Y, work.Bottom - size.Height)));
+                }
+            }
+            return fallback;
         }
 
         protected override void Dispose(bool disposing)
@@ -151,7 +279,7 @@ namespace RScreenRec
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
             int X, int Y, int cx, int cy, uint uFlags);
 
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
@@ -171,9 +299,16 @@ namespace RScreenRec
         {
             try
             {
-                SetWindowDisplayAffinity(handle, WDA_EXCLUDEFROMCAPTURE);
+                if (!SetWindowDisplayAffinity(handle, WDA_EXCLUDEFROMCAPTURE))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    Logger.Log("REC overlay exclusion could not be enabled. Win32 error: " + error);
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Log("REC overlay exclusion is unavailable.", ex);
+            }
         }
 
         protected override CreateParams CreateParams
@@ -181,8 +316,9 @@ namespace RScreenRec
             get
             {
                 var cp = base.CreateParams;
-                // Force topmost, transparent, no-activate
-                cp.ExStyle |= 0x80 | 0x8 | 0x80000 | 0x20; // WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT
+                // No activation, but allow mouse interaction for dragging.
+                // WS_EX_TRANSPARENT would make the badge impossible to drag.
+                cp.ExStyle |= 0x80 | 0x8 | 0x80000 | 0x08000000; // TOOLWINDOW | TOPMOST | LAYERED | NOACTIVATE
                 return cp;
             }
         }
