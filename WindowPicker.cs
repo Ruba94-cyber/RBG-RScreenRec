@@ -39,7 +39,7 @@ namespace RScreenRec
             using (var confirm = new Button())
             using (var cancel = new Button())
             {
-                dialog.Text = "Select a window - RScreenRec";
+                dialog.Text = "Select window - RScreenRec";
                 dialog.StartPosition = FormStartPosition.CenterScreen;
                 dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
                 dialog.MaximizeBox = false;
