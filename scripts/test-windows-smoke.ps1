@@ -34,12 +34,24 @@ try {
     $targetHarness = Join-Path $testRoot 'SyntheticCaptureTarget.exe'
     & $compiler /nologo /target:winexe "/out:$targetHarness" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll (Join-Path $root 'tests\SyntheticCaptureTarget.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Could not compile the synthetic window target.' }
-    & $compiler /nologo /target:exe "/out:$windowHarness" "/reference:$(Join-Path $testRoot 'RBG - RScreenRec.exe')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll (Join-Path $root 'tests\WindowCaptureSmoke.cs')
-    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the selected-window smoke harness.' }
-    & $compiler /nologo /target:exe "/out:$executableWindowHarness" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll (Join-Path $root 'tests\ExecutableWindowCaptureSmoke.cs')
-    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the actual-executable window-capture harness.' }
+    $smokeProject = Join-Path $root 'tests\RScreenRec.SmokeAutomation.csproj'
+    & dotnet build $smokeProject --configuration Release --output $testRoot --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'Could not build the FlaUI selected-window smoke harness.' }
+    $executableSmokeProject = Join-Path $root 'tests\RScreenRec.ExecutableSmokeAutomation.csproj'
+    & dotnet build $executableSmokeProject --configuration Release --output $testRoot --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'Could not build the FlaUI actual-executable smoke harness.' }
+    $settingsSmokeProject = Join-Path $root 'tests\RScreenRec.SettingsUiAutomation.csproj'
+    & dotnet build $settingsSmokeProject --configuration Release --output $testRoot --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'Could not build the FlaUI shortcut-settings smoke harness.' }
     & $compiler /nologo /target:exe "/out:$longHarness" "/reference:$(Join-Path $testRoot 'RBG - RScreenRec.exe')" (Join-Path $root 'tests\LongDurationWriterSmoke.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Could not compile the long-duration writer harness.' }
+
+    $shortcutTest = Join-Path $root 'tests\Test-Shortcuts.ps1'
+    $shortcutTestOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $shortcutTest -Executable $runtimeExe -Namespace RScreenRec -ApplicationName 'RBG RScreenRec' 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Shortcut component tests failed: $($shortcutTestOutput -join ' ')" }
+    $settingsHarness = Join-Path $testRoot 'ShortcutSettingsUiSmoke.exe'
+    $settingsOutput = & $settingsHarness $runtimeExe 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "FlaUI shortcut-settings smoke test failed: $($settingsOutput -join ' ')" }
 
     $captureCases = @(
         @{ Name = 'odd-landscape'; Width = 671; Height = 377 },
@@ -108,6 +120,30 @@ try {
         }
     }
 
+    $pausedVideo = Join-Path $testRoot 'paused-window.mp4'
+    $pausedOutput = & $windowHarness $pausedVideo 671 377 5 pause 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Pause/resume test failed: $($pausedOutput -join ' ')" }
+    $pausedProbeJson = & $ffprobe.Source -v error -show_entries 'format=duration' -of json $pausedVideo
+    if ($LASTEXITCODE -ne 0) { throw 'ffprobe could not inspect the paused MP4.' }
+    $pausedProbe = ($pausedProbeJson -join [Environment]::NewLine) | ConvertFrom-Json
+    $effectiveDuration = [double]::Parse([string]$pausedProbe.format.duration, [Globalization.CultureInfo]::InvariantCulture)
+    if ($effectiveDuration -lt 3.4 -or $effectiveDuration -gt 4.8) {
+        throw "Paused timeline has an unexpected duration: $effectiveDuration seconds; expected about 4 seconds."
+    }
+    & $ffmpeg.Source -v error -xerror -i $pausedVideo -f null NUL
+    if ($LASTEXITCODE -ne 0) { throw 'Paused/resumed MP4 could not fully decode.' }
+    $results += [pscustomobject]@{
+        Test = 'pause-resume'
+        Backend = 'Windows Graphics Capture'
+        SizeBytes = [int64](Get-Item -LiteralPath $pausedVideo).Length
+        Encoded = '671x377 padded'
+        FPS = '30/1'
+        Frames = 'validated via duration'
+        DurationSeconds = $effectiveDuration
+        FullDecode = 'ok'
+        OcclusionAndRestore = 'not-applicable'
+    }
+
     $closedVideo = Join-Path $testRoot 'closed-window.mp4'
     $closeOutput = & $windowHarness $closedVideo 671 377 2 close 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Closing the selected window failed: $($closeOutput -join ' ')" }
@@ -140,8 +176,14 @@ try {
     $executableOutputText = & $executableWindowHarness (Join-Path $testRoot 'RBG - RScreenRec.exe') $executableOutput 671 377 2>&1
     if ($LASTEXITCODE -ne 0) { throw "Actual RScreenRec executable Shift/window capture failed: $($executableOutputText -join ' ')" }
     if (-not ($executableOutputText -join ' ').Contains('shift_picker=seen_with_shift_held') -or
-        -not ($executableOutputText -join ' ').Contains('occlusion_and_resume=ok')) {
-        throw "Actual-executable Shift/occlusion evidence was incomplete: $($executableOutputText -join ' ')"
+        -not ($executableOutputText -join ' ').Contains('occlusion_and_resume=ok') -or
+        -not ($executableOutputText -join ' ').Contains('recording_overlay=visible') -or
+        -not ($executableOutputText -join ' ').Contains('pause_resume=ok') -or
+        -not ($executableOutputText -join ' ').Contains('full_screen_overlay=visible') -or
+        -not ($executableOutputText -join ' ').Contains('overlay_drag=persisted') -or
+        -not ($executableOutputText -join ' ').Contains('overlay_position_reloaded=true') -or
+        -not ($executableOutputText -join ' ').Contains('full_screen_recording=finalized')) {
+        throw "Actual-executable Shift/full-screen overlay/pause evidence was incomplete: $($executableOutputText -join ' ')"
     }
     $executableVideo = Get-ChildItem -LiteralPath $executableOutput -Filter 'rec_*.mp4' -File | Select-Object -First 1
     if (-not $executableVideo) { throw 'The actual executable did not produce an MP4 in the isolated smoke folder.' }
@@ -152,6 +194,9 @@ try {
     if ($executableStream.codec_name -ne 'h264' -or $executableStream.width -ne 672 -or $executableStream.height -ne 378 -or
         $executableStream.avg_frame_rate -ne '30/1' -or [int64]$executableStream.nb_frames -lt 150 -or [double]$executableStream.duration -lt 6) {
         throw "Unexpected actual-executable stream metadata: $($executableStream | ConvertTo-Json -Compress)"
+    }
+    if ([double]$executableStream.duration -lt 7.2 -or [double]$executableStream.duration -gt 8.8) {
+        throw "Actual-executable pause timeline did not exclude the pause interval: $($executableStream.duration) seconds; expected about 8 seconds."
     }
     & $ffmpeg.Source -v error -xerror -i $executableVideo.FullName -f null NUL
     if ($LASTEXITCODE -ne 0) { throw 'The actual-executable window recording did not fully decode.' }
@@ -200,6 +245,61 @@ try {
         DurationSeconds = [double]$executableStream.duration
         FullDecode = 'ok'
         OcclusionAndRestore = 'ok; no magenta cover in stream'
+    }
+
+    $fullScreenOverlayDirectory = Join-Path $executableOutput 'full-screen-overlay'
+    $fullScreenVideo = Get-ChildItem -LiteralPath $fullScreenOverlayDirectory -Filter 'rec_*.mp4' -File |
+        Sort-Object LastWriteTime | Select-Object -First 1
+    if (-not $fullScreenVideo) { throw 'The full-screen overlay smoke did not produce a finalized MP4.' }
+    $fullScreenJson = & $ffprobe.Source -v error -select_streams v:0 -show_entries 'stream=codec_name,width,height,avg_frame_rate,duration:format=size' -of json $fullScreenVideo.FullName
+    if ($LASTEXITCODE -ne 0) { throw 'ffprobe failed for the synthetic full-screen recording.' }
+    $fullScreenProbe = ($fullScreenJson -join [Environment]::NewLine) | ConvertFrom-Json
+    $fullScreenStream = $fullScreenProbe.streams | Select-Object -First 1
+    if ($fullScreenStream.codec_name -ne 'h264' -or $fullScreenStream.avg_frame_rate -ne '30/1' -or
+        [double]$fullScreenStream.duration -lt 1.5) {
+        throw "Unexpected synthetic full-screen stream metadata: $($fullScreenStream | ConvertTo-Json -Compress)"
+    }
+    & $ffmpeg.Source -v error -xerror -i $fullScreenVideo.FullName -f null NUL
+    if ($LASTEXITCODE -ne 0) { throw 'The synthetic full-screen MP4 did not fully decode.' }
+    $overlayProbeValues = (Get-Content -LiteralPath (Join-Path $fullScreenOverlayDirectory 'overlay-capture-probe.txt') -Raw).Split(',')
+    if ($overlayProbeValues.Length -ne 7) { throw 'The REC overlay capture probe is malformed.' }
+    $screenLeft = [int]$overlayProbeValues[0]
+    $screenTop = [int]$overlayProbeValues[1]
+    $overlayLeft = [int]$overlayProbeValues[2]
+    $overlayTop = [int]$overlayProbeValues[3]
+    $overlayWidth = [int]$overlayProbeValues[4]
+    $overlayHeight = [int]$overlayProbeValues[5]
+    $affinityEnabled = $overlayProbeValues[6] -eq '1'
+    if ($affinityEnabled) {
+        $overlayFrame = Join-Path $testRoot 'full-screen-overlay-frame.png'
+        & $ffmpeg.Source -v error -ss 1.5 -i $fullScreenVideo.FullName -frames:v 1 -update 1 -y $overlayFrame
+        if ($LASTEXITCODE -ne 0) { throw 'Could not extract the full-screen REC exclusion frame.' }
+        $overlayBitmap = [System.Drawing.Bitmap]::FromFile($overlayFrame)
+        try {
+            $sampleX = $overlayLeft - $screenLeft + [int]($overlayWidth / 2)
+            $sampleY = $overlayTop - $screenTop + [int]($overlayHeight / 2)
+            if ($sampleX -lt 0 -or $sampleX -ge $overlayBitmap.Width -or $sampleY -lt 0 -or $sampleY -ge $overlayBitmap.Height) {
+                throw 'The saved REC overlay position lies outside the encoded full-screen frame.'
+            }
+            $overlayPixel = $overlayBitmap.GetPixel($sampleX, $sampleY)
+            if ($overlayPixel.R -gt 40 -or $overlayPixel.G -lt 210 -or $overlayPixel.B -lt 210) {
+                throw "The REC overlay appeared in the full-screen recording although capture exclusion was enabled (pixel $($overlayPixel.R),$($overlayPixel.G),$($overlayPixel.B))."
+            }
+        }
+        finally {
+            $overlayBitmap.Dispose()
+        }
+    }
+    $results += [pscustomobject]@{
+        Test = 'actual-executable-full-screen-rec-overlay'
+        Backend = 'Desktop capture with synthetic cyan surface'
+        SizeBytes = [int64]$fullScreenProbe.format.size
+        Encoded = "$($fullScreenStream.width)x$($fullScreenStream.height)"
+        FPS = $fullScreenStream.avg_frame_rate
+        Frames = 'validated via duration and full decode'
+        DurationSeconds = [double]$fullScreenStream.duration
+        FullDecode = 'ok'
+        OcclusionAndRestore = if ($affinityEnabled) { 'REC excluded; drag and restart position persisted' } else { 'exclusion unavailable; drag and restart position persisted' }
     }
 
     $longVideo = Join-Path $testRoot 'over-one-hour.mp4'

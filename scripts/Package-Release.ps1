@@ -13,9 +13,9 @@ if ($LASTEXITCODE -ne 0) { throw "Release x64 build check failed (exit $LASTEXIT
 
 $exe = Join-Path $root 'bin\Release\RBG - RScreenRec.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Release executable is missing: $exe" }
-$version = '1.2.0'
+$version = '1.3.0'
 $info = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
-if ($info.FileVersion -ne '1.2.0.0' -or $info.ProductVersion -ne $version) {
+if ($info.FileVersion -ne '1.3.0.0' -or $info.ProductVersion -ne $version) {
     throw "Unexpected executable version metadata: file=$($info.FileVersion), product=$($info.ProductVersion)"
 }
 if ($info.CompanyName -ne 'Paolo Rubagotti' -or
