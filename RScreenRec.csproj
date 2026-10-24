@@ -41,6 +41,7 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
+    <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
@@ -56,6 +57,7 @@
     <Compile Include="MediaFoundationMp4Writer.cs" />
     <Compile Include="ScreenRecorder.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ShortcutSettings.cs" />
     <Compile Include="WindowPicker.cs" />
     <Compile Include="FrameSources.cs" />
   </ItemGroup>
