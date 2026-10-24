@@ -23,7 +23,8 @@ namespace RScreenRec
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
 
-            dpiScale = DpiHelper.GetSystemDpiScale() * (VisualPreferences.BadgeSizePercent / 100f);
+            dpiScale = DpiHelper.GetScreenDpiScale(Screen.FromRectangle(screenBounds)) *
+                (VisualPreferences.BadgeSizePercent / 100f);
             int scaledOffsetY = DpiHelper.ScaleValue(66, dpiScale);
             int scaledOffsetX = DpiHelper.ScaleValue(32, dpiScale);
             int scaledWidth = DpiHelper.ScaleValue(94, dpiScale);
