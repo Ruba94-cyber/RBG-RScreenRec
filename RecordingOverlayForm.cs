@@ -176,6 +176,16 @@ namespace RScreenRec
             SavePosition(Location);
         }
 
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            if (dragging)
+            {
+                dragging = false;
+                SavePosition(Location);
+            }
+        }
+
         private static string PositionFile
         {
             get
@@ -251,7 +261,7 @@ namespace RScreenRec
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
             int X, int Y, int cx, int cy, uint uFlags);
 
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
         private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
@@ -271,9 +281,16 @@ namespace RScreenRec
         {
             try
             {
-                SetWindowDisplayAffinity(handle, WDA_EXCLUDEFROMCAPTURE);
+                if (!SetWindowDisplayAffinity(handle, WDA_EXCLUDEFROMCAPTURE))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    Logger.Log("REC overlay exclusion could not be enabled. Win32 error: " + error);
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Log("REC overlay exclusion is unavailable.", ex);
+            }
         }
 
         protected override CreateParams CreateParams
