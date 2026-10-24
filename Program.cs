@@ -13,6 +13,12 @@ namespace RScreenRec
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
         private const int VK_SHIFT = 0x10;
+        private const int VK_CONTROL = 0x11;
+
+        private static bool HasArgument(string[] args, string name)
+        {
+            return Array.Exists(args, arg => string.Equals(arg, name, StringComparison.OrdinalIgnoreCase));
+        }
 
         private const string InstanceMutexName = @"Local\RScreenRec_SingleInstance";
         private const string StopEventName = @"Local\RScreenRec_StopEvent";
@@ -33,14 +39,27 @@ namespace RScreenRec
         private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Stopwatch startupStopwatch = Stopwatch.StartNew();
             ConfigureDpiAwareness();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            bool windowSelectionRequested = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            bool forceWindow = HasArgument(args, "--record-window");
+            bool forceScreen = HasArgument(args, "--record-screen");
+            bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+            bool controlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+            bool settingsRequested = HasArgument(args, "--settings") ||
+                (!forceWindow && !forceScreen && shiftHeld && controlHeld);
+            if (settingsRequested)
+            {
+                ShortcutSettings.Show("RBG RScreenRec", "Screen recording", "Window recording",
+                    "--record-screen", "--record-window", "Ctrl+Alt+R", "Ctrl+Alt+W");
+                return;
+            }
+
+            bool windowSelectionRequested = forceWindow || (!forceScreen && shiftHeld);
             bool isFirstInstance;
             using (var mutex = new Mutex(true, InstanceMutexName, out isFirstInstance))
             {
@@ -121,8 +140,10 @@ namespace RScreenRec
 
                     OverlayHost touchOverlay = selectedWindow == IntPtr.Zero
                         ? OverlayHost.Start("TouchOverlay", () => new TouchOverlayForm(bounds)) : null;
-                    OverlayHost recordingOverlay = selectedWindow == IntPtr.Zero
-                        ? OverlayHost.Start("RecordingOverlay", () => new RecordingOverlayForm(bounds)) : null;
+                    Rectangle overlayBounds = selectedWindow == IntPtr.Zero
+                        ? bounds : Screen.FromHandle(selectedWindow).Bounds;
+                    OverlayHost recordingOverlay = OverlayHost.Start("RecordingOverlay",
+                        () => new RecordingOverlayForm(overlayBounds));
 
                     // Wait until stop is requested or recording ends
                     bool stopRequested = false;
