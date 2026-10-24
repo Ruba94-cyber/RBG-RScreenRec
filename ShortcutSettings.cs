@@ -190,7 +190,11 @@ namespace RScreenRec
 
         private static bool MatchesShortcut(string persisted, string requested)
         {
-            return string.Equals((persisted ?? "").Trim(), (requested ?? "").Trim(),
+            string[] left = (persisted ?? "").Replace(" ", "").Split('+');
+            string[] right = (requested ?? "").Replace(" ", "").Split('+');
+            Array.Sort(left, StringComparer.OrdinalIgnoreCase);
+            Array.Sort(right, StringComparer.OrdinalIgnoreCase);
+            return string.Equals(string.Join("+", left), string.Join("+", right),
                 StringComparison.OrdinalIgnoreCase);
         }
 
