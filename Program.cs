@@ -47,6 +47,12 @@ namespace RScreenRec
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            if (ShortcutHotkeyHost.IsRequested(args))
+            {
+                ShortcutHotkeyHost.Run();
+                return;
+            }
+
             if (HasArgument(args, "--toggle-pause"))
             {
                 SignalPause();
@@ -81,6 +87,8 @@ namespace RScreenRec
                         "--record-screen", "--record-window", "Ctrl+Alt+R", "Ctrl+Alt+W");
                     return;
                 }
+
+                ShortcutHotkeyHost.EnsureRunning();
 
                 // Clear only stale fallback requests before publishing the stop event.
                 // A second launch retries opening the event while this instance starts.

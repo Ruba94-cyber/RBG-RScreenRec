@@ -159,7 +159,7 @@ namespace RScreenRec
                 {
                     AutoSize = true, ForeColor = Color.DimGray,
                     Text = recorder
-                        ? "Press a recording shortcut again to stop. Pause / resume keeps the video open.\r\nIf you move this app, save the shortcuts again from its new location."
+                        ? "Press a recording shortcut again to stop. Pause / resume keeps the video open.\r\nA small shortcut helper starts with Windows. If you move this app, save settings again."
                         : "Save to enable the shortcuts. If you move this app, save them again from its new location.",
                     Margin = new Padding(0, px(8), 0, 0)
                 });
@@ -235,6 +235,7 @@ namespace RScreenRec
                                 VisualPreferences.BorderFadeDurationMs = (int)fadeDuration.Value;
                                 VisualPreferences.SelectionMagnifierEnabled = magnifier.Checked;
                             }
+                            ShortcutHotkeyHost.RefreshAfterSettingsSave();
                         }
                         catch
                         {
@@ -247,6 +248,8 @@ namespace RScreenRec
                                 try { SaveShortcut(applicationName, thirdMode, thirdArgument, oldThird ?? ""); }
                                 catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                             }
+                            try { ShortcutHotkeyHost.RefreshAfterSettingsSave(); }
+                            catch (Exception ex) { System.Diagnostics.Debug.WriteLine(ex); }
                             throw;
                         }
 
