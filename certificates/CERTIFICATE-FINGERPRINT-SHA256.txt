@@ -1,0 +1,4 @@
+SHA-256 fingerprint del file CER
+A8F7445D921A1895901DFB8E9BACD23D25F96F425EE63D82D2269B4ECA004321
+
+Confronta questo valore su un canale indipendente prima di importare il certificato.

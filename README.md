@@ -4,7 +4,7 @@ A C# desktop application for advanced screen recording with visual overlays and 
 
 Author: Paolo Rubagotti.
 
-Windows release packages are unsigned because no Authenticode certificate is available. The executable metadata identifies Paolo Rubagotti and `paolo.ruba.1913@gmail.com`; Windows may show an unknown publisher notice.
+Windows release executables are Authenticode-signed with Paolo Rubagotti's self-signed code-signing certificate. Each release includes the public `.cer` and its SHA-256 fingerprint; the private `.pfx` is never distributed. Because this certificate is self-signed rather than issued by a public CA, Windows can still show an unknown-publisher or SmartScreen warning until the user chooses to trust it.
 
 ## Features
 
@@ -79,7 +79,9 @@ Type part of a window title to filter the list, or choose **Click a window...** 
 
 ### Release download
 
-Download `RBG-RScreenRec-1.3.0-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`.
+Download `RBG-RScreenRec-1.3.1-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`.
+
+The archive contains `Paolo-Rubagotti-CodeSigning.cer` and `CERTIFICATE-FINGERPRINT-SHA256.txt`. On a PC you administer, import the `.cer` into **Trusted Root Certification Authorities** and **Trusted Publishers** before running the app to have Windows recognize this specific signer. Verify the fingerprint against the one published with the release before trusting it. SmartScreen reputation warnings can remain even after importing a self-signed certificate.
 
 Windows Graphics Capture is used when available. If it cannot be initialized, RScreenRec warns before using PrintWindow compatibility capture; some GPU-rendered or protected windows may then appear blank or incomplete. When a target is minimized, Windows may stop rendering it. RScreenRec keeps the last captured image in the video timeline and resumes with new frames after the window is restored; this is not live capture while minimized.
 

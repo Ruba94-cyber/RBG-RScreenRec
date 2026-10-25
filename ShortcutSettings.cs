@@ -14,6 +14,10 @@ namespace RScreenRec
     {
         private const string ShortcutFolderName = "RBG Utilities";
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetForegroundWindow(IntPtr windowHandle);
+
         public static void Show(string applicationName, string firstMode, string secondMode,
             string firstArgument, string secondArgument, string firstSuggestion, string secondSuggestion)
         {
@@ -24,78 +28,81 @@ namespace RScreenRec
             {
                 Text = applicationName + " - Settings",
                 StartPosition = FormStartPosition.CenterScreen,
-                FormBorderStyle = FormBorderStyle.FixedDialog,
-                MaximizeBox = false,
+                FormBorderStyle = FormBorderStyle.Sizable,
+                MaximizeBox = true,
                 MinimizeBox = false,
                 ShowInTaskbar = true,
-                ClientSize = new Size(455, recorder ? 395 : 358),
+                AutoScaleDimensions = new SizeF(96F, 96F),
+                AutoScaleMode = AutoScaleMode.Dpi,
+                AutoScroll = true,
+                ClientSize = new Size(550, recorder ? 490 : 445),
                 Font = new Font("Segoe UI", 9F)
             })
             {
                 var introduction = new Label
                 {
-                    Location = new Point(18, 13),
-                    Size = new Size(419, 43),
+                    Location = new Point(22, 18),
+                    Size = new Size(506, 52),
                     Text = "Assign Ctrl+Alt+letter or Ctrl+Alt+F1-F12 combinations.\r\nPress Delete in a shortcut box to remove the assignment."
                 };
                 var firstLabel = new Label
                 {
-                    Location = new Point(18, 65), Size = new Size(405, 21), Text = firstMode
+                    Location = new Point(22, 80), Size = new Size(506, 25), Text = firstMode
                 };
-                var firstInput = CreateShortcutInput(18, 88, 418);
+                var firstInput = CreateShortcutInput(22, 110, 506);
                 firstInput.Text = ReadShortcut(applicationName, firstMode) ?? firstSuggestion;
                 var secondLabel = new Label
                 {
-                    Location = new Point(18, 124), Size = new Size(405, 21), Text = secondMode
+                    Location = new Point(22, 155), Size = new Size(506, 25), Text = secondMode
                 };
-                var secondInput = CreateShortcutInput(18, 147, 418);
+                var secondInput = CreateShortcutInput(22, 185, 506);
                 secondInput.Text = ReadShortcut(applicationName, secondMode) ?? secondSuggestion;
 
                 var thirdLabel = new Label
                 {
-                    Location = new Point(18, 184), Size = new Size(405, 21),
+                    Location = new Point(22, 230), Size = new Size(506, 25),
                     Text = thirdMode, Visible = recorder
                 };
-                var thirdInput = CreateShortcutInput(18, 207, 418);
+                var thirdInput = CreateShortcutInput(22, 260, 506);
                 thirdInput.Visible = recorder;
                 if (recorder)
                     thirdInput.Text = ReadShortcut(applicationName, thirdMode) ?? "Ctrl+Alt+P";
 
                 var badgeLabel = new Label
                 {
-                    Text = "REC badge size (%)", Location = new Point(18, 257),
-                    Size = new Size(220, 23), Visible = recorder
+                    Text = "REC badge size (%)", Location = new Point(22, 315),
+                    Size = new Size(280, 28), Visible = recorder
                 };
                 var badgeScale = new NumericUpDown
                 {
-                    Location = new Point(338, 254), Size = new Size(98, 27),
+                    Location = new Point(418, 310), Size = new Size(110, 32),
                     Minimum = 70, Maximum = 130, Increment = 5,
                     Value = VisualPreferences.BadgeSizePercent, Visible = recorder
                 };
 
                 var borderLabel = new Label
                 {
-                    Text = "Cyan border fade (milliseconds)", Location = new Point(18, 198),
-                    Size = new Size(285, 23), Visible = !recorder
+                    Text = "Cyan border fade (milliseconds)", Location = new Point(22, 236),
+                    Size = new Size(340, 28), Visible = !recorder
                 };
                 var fadeDuration = new NumericUpDown
                 {
-                    Location = new Point(338, 195), Size = new Size(98, 27),
+                    Location = new Point(418, 231), Size = new Size(110, 32),
                     Minimum = 120, Maximum = 500, Increment = 20,
                     Value = VisualPreferences.BorderFadeDurationMs, Visible = !recorder
                 };
                 var magnifier = new CheckBox
                 {
                     Text = "Show optional pixel magnifier when selecting an area",
-                    Location = new Point(18, 240), Size = new Size(418, 25),
+                    Location = new Point(22, 274), Size = new Size(506, 30),
                     Checked = VisualPreferences.SelectionMagnifierEnabled,
                     Visible = !recorder
                 };
 
                 var note = new Label
                 {
-                    Location = new Point(18, recorder ? 294 : 275),
-                    Size = new Size(418, 44),
+                    Location = new Point(22, recorder ? 354 : 315),
+                    Size = new Size(506, 50),
                     ForeColor = Color.DimGray,
                     Text = "Windows Explorer handles global shortcuts; no background app.\r\nIf the executable is moved, save shortcuts again."
                 };
@@ -103,14 +110,14 @@ namespace RScreenRec
                 var saveButton = new Button
                 {
                     Text = "Save settings",
-                    Location = new Point(228, recorder ? 351 : 314),
-                    Size = new Size(117, 30)
+                    Location = new Point(300, recorder ? 420 : 382),
+                    Size = new Size(137, 34)
                 };
                 var cancelButton = new Button
                 {
                     Text = "Cancel",
-                    Location = new Point(357, recorder ? 351 : 314),
-                    Size = new Size(79, 30),
+                    Location = new Point(448, recorder ? 420 : 382),
+                    Size = new Size(80, 34),
                     DialogResult = DialogResult.Cancel
                 };
                 saveButton.Click += (sender, args) =>
@@ -194,6 +201,34 @@ namespace RScreenRec
                 });
                 dialog.AcceptButton = saveButton;
                 dialog.CancelButton = cancelButton;
+                dialog.Shown += (sender, args) =>
+                {
+                    Rectangle workArea = Screen.FromControl(dialog).WorkingArea;
+                    int maxWidth = Math.Max(1, workArea.Width - 24);
+                    int maxHeight = Math.Max(1, workArea.Height - 48);
+                    if (dialog.Width > maxWidth || dialog.Height > maxHeight)
+                    {
+                        dialog.Size = new Size(
+                            Math.Min(dialog.Width, maxWidth),
+                            Math.Min(dialog.Height, maxHeight));
+                    }
+
+                    dialog.Location = new Point(
+                        workArea.Left + Math.Max(0, (workArea.Width - dialog.Width) / 2),
+                        workArea.Top + Math.Max(0, (workArea.Height - dialog.Height) / 2));
+                    dialog.TopMost = true;
+                    dialog.Activate();
+                    dialog.BringToFront();
+                    SetForegroundWindow(dialog.Handle);
+                    dialog.BeginInvoke((Action)(() =>
+                    {
+                        if (dialog.IsDisposed)
+                            return;
+                        dialog.TopMost = false;
+                        dialog.Activate();
+                        SetForegroundWindow(dialog.Handle);
+                    }));
+                };
                 dialog.ShowDialog();
             }
         }
