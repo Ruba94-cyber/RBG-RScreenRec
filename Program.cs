@@ -76,6 +76,9 @@ namespace RScreenRec
                     return; // second launch only stops the running recorder
                 }
 
+                // Clear only stale fallback requests before publishing the stop event.
+                // A second launch retries opening the event while this instance starts.
+                TryDeleteStopRequest();
                 bool createdNewStopEvent;
                 using (var stopEvent = new EventWaitHandle(
                     false,
@@ -83,11 +86,8 @@ namespace RScreenRec
                     StopEventName,
                     out createdNewStopEvent))
                 {
-                    stopEvent.Reset();
                     using (var pauseEvent = new EventWaitHandle(false, EventResetMode.AutoReset, PauseEventName))
                     {
-                    TryDeleteStopRequest();
-
                     IntPtr selectedWindow = IntPtr.Zero;
                     if (windowSelectionRequested)
                     {
@@ -187,7 +187,6 @@ namespace RScreenRec
                         MessageBox.Show("Recording ended with an error: " + ex.Message,
                             "RScreenRec", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
-                    stopEvent.Reset();
                     TryDeleteStopRequest();
                     if (recordingOverlay != null) recordingOverlay.Dispose();
                     if (touchOverlay != null) touchOverlay.Dispose();
@@ -234,21 +233,28 @@ namespace RScreenRec
         private static void SignalStop()
         {
             bool signaled = false;
-            try
+            const int maxAttempts = 20;
+            for (int attempt = 0; attempt < maxAttempts && !signaled; attempt++)
             {
-                using (var stopEvent = EventWaitHandle.OpenExisting(StopEventName))
+                try
                 {
-                    stopEvent.Set();
-                    signaled = true;
+                    using (var stopEvent = EventWaitHandle.OpenExisting(StopEventName))
+                    {
+                        stopEvent.Set();
+                        signaled = true;
+                    }
                 }
-            }
-            catch (WaitHandleCannotBeOpenedException)
-            {
-                // No running instance to stop
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(string.Format("Warning: could not signal stop: {0}", ex.Message));
+                catch (WaitHandleCannotBeOpenedException)
+                {
+                    // The first instance may own the mutex but not have published its event yet.
+                    if (attempt + 1 < maxAttempts)
+                        Thread.Sleep(25);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log("Could not signal stop event.", ex);
+                    break;
+                }
             }
 
             // The file is a fallback only. Writing it after a successful event

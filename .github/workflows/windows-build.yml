@@ -1,4 +1,4 @@
-name: Windows build and release package
+name: Windows build and shortcut tests
 
 on:
   pull_request:
@@ -21,18 +21,12 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error "$path`: $($_.Message)" }; exit 1 }
           }
-      - name: Build and package Release x64
+      - name: Build Release x64
         shell: pwsh
         run: |
-          & .\scripts\Package-Release.ps1
+          & .\scripts\build-check.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Test per-user keyboard shortcuts (isolated)
         shell: pwsh
         run: |
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\tests\\Test-Shortcuts.ps1 -Executable '.\\bin\Release\\RBG - RScreenRec.exe' -Namespace 'RScreenRec' -ApplicationName 'RBG RScreenRec'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: RBG-RScreenRec-1.3.0-windows-x64
-          path: release/*
-          if-no-files-found: error
-          retention-days: 14
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Shortcuts.ps1 -Executable '.\bin\Release\RBG - RScreenRec.exe' -Namespace 'RScreenRec' -ApplicationName 'RBG RScreenRec'

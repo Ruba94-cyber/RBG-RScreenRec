@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.1 — settings, recording stop, and REC badge polish
+
+- Keep the Ctrl+Shift settings dialog fully visible and resizable across display scaling and smaller work areas, and bring it to the foreground when opened.
+- Clip the blinking REC badge to its rounded outline to remove the purple fringe around antialiased edges.
+- Retry delivery of the stop event when a second launch races with recorder startup, so launching again reliably stops an active recording.
+
 ## 1.3.0 — keyboard controls, recording controls, and reliability
 
 - Add Windows Explorer-backed, configurable per-user hotkeys for screen, window, and pause/resume modes without idle background processes.

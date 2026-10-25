@@ -31,6 +31,14 @@ namespace RScreenRec
             int scaledHeight = DpiHelper.ScaleValue(29, dpiScale);
 
             Size = new Size(scaledWidth, scaledHeight);
+            using (GraphicsPath windowPath = CreateRoundedRectangle(
+                new Rectangle(0, 0, scaledWidth, scaledHeight),
+                DpiHelper.ScaleValue(9, dpiScale)))
+            {
+                // Clip the native window to the badge instead of color-keying magenta.
+                // Antialiased pixels mixed with a transparency key create purple fringes.
+                Region = new Region(windowPath);
+            }
             Point defaultLocation = new Point(
                 screenBounds.Right - scaledWidth - scaledOffsetX,
                 screenBounds.Bottom - scaledHeight - scaledOffsetY
@@ -41,8 +49,7 @@ namespace RScreenRec
                 : defaultLocation;
             TopMost = true;
             ShowInTaskbar = false;
-            BackColor = Color.Magenta;
-            TransparencyKey = Color.Magenta;
+            BackColor = Color.FromArgb(24, 24, 24);
             DoubleBuffered = true;
 
             Load += (s, e) =>
