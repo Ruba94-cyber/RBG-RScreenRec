@@ -55,7 +55,7 @@ Windows release executables are Authenticode-signed with Paolo Rubagotti's self-
 3. Continue using other applications; window mode captures only the selected window and does not use desktop capture as a fallback.
 4. Launch `RBG - RScreenRec.exe` again to stop and finalize the MP4.
 
-### Configurable keyboard shortcuts (no background process)
+### Configurable keyboard shortcuts
 
 Hold **Ctrl+Shift while launching the executable** to open Shortcut Settings.
 Choose separate combinations for **screen recording** and **window recording**.
@@ -63,7 +63,7 @@ The suggested defaults are `Ctrl+Alt+R` (screen), `Ctrl+Alt+W` (window), and `Ct
 
 - Click a shortcut box and press **Ctrl+Alt+letter** or **Ctrl+Alt+F1–F12** (optionally with Shift).
 - Press **Delete** to clear a shortcut, then save to remove its Windows link.
-- The application creates per-user Start Menu shortcuts in `RBG Utilities`. Windows Explorer launches an idle recorder. During recording, RScreenRec handles the configured stop and pause keys directly, so repeated keys do not depend on Explorer launching the same link again. No RScreenRec process remains running between recordings. The settings dialog checks collisions between both RBG utilities, but Windows and unrelated applications may still reserve launch combinations. Explorer must be running and shortcut registration can take a moment.
+- The application creates per-user Start Menu shortcuts in `RBG Utilities`. A small windowless shortcut helper stays active between recordings and starts again at Windows sign-in. It handles only the configured combinations; it does not save typed keys. During recording, RScreenRec also handles stop and pause directly. The Start Menu links remain available if the helper is stopped. Clear all shortcuts and save to stop the helper and remove its Startup link. The settings dialog checks collisions between both RBG utilities, but Windows and unrelated applications may still reserve combinations.
 - If you move or rename the executable, reopen settings from its new location and save again.
 - Settings uses text-sized fields and a scrollable body; Save and Cancel remain visible when the window is resized.
 - The original direct-executable behavior remains unchanged: normal launch starts/stops screen recording, Shift+launch requests window capture, and Ctrl+Shift+launch opens settings. The two hotkeys launch the respective modes; when a recording is already active, either launch stops it.
@@ -80,7 +80,7 @@ Type part of a window title to filter the list, or choose **Click a window...** 
 
 ### Release download
 
-Download `RBG-RScreenRec-1.3.2-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`.
+Download `RBG-RScreenRec-1.3.3-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`. Open Settings from this new executable and save once to update shortcuts that still point to an older extracted version.
 
 The archive contains `Paolo-Rubagotti-CodeSigning.cer` and `CERTIFICATE-FINGERPRINT-SHA256.txt`. On a PC you administer, import the `.cer` into **Trusted Root Certification Authorities** and **Trusted Publishers** before running the app to have Windows recognize this specific signer. Verify the fingerprint against the one published with the release before trusting it. SmartScreen reputation warnings can remain even after importing a self-signed certificate.
 
@@ -92,7 +92,7 @@ The H.264 profile preserves a 30 FPS output timeline and does not deliberately r
 
 Run `scripts/test-windows-smoke.ps1` in an interactive Windows session. It also validates a pause/resume case by checking the resulting MP4 duration and full decoding. It builds the Release app, automates the window picker against a separate synthetic process, exercises odd-landscape, portrait, and panoramic WGC capture, checks occlusion, resize, minimize/restore, selected-window closure, and validates every MP4 with FFmpeg. It also writes a synthetic timeline longer than one hour. The test runner requires the .NET Framework C# compiler plus `ffmpeg.exe` and `ffprobe.exe` on `PATH`; these are development tools and are not shipped with RScreenRec. Successful runs remove their temporary media, while failed runs retain the artifacts for diagnosis.
 
-Additional FlaUI coverage in `tests/RScreenRec.SettingsUiAutomation.csproj` and `tests/RScreenRec.ExecutableSmokeAutomation.csproj` checks Settings at normal and compact sizes, picker font/row geometry, saving and reopening shortcut assignments, REC badge dragging and position persistence, capture exclusion, and real keyboard input for stop, pause/resume, and customized bindings. These keyboard tests never substitute a process launch for a key press. The separate `ExecutableWindowCaptureSmoke --installed-toggle <executable>` mode tests the installed default shortcut from idle through two start/stop cycles, including pause/resume; it requires the installed link to target that executable and refuses an already active recording. Explorer or Windows restart persistence and other monitor/DPI configurations still require manual acceptance.
+Additional FlaUI coverage in `tests/RScreenRec.SettingsUiAutomation.csproj` and `tests/RScreenRec.ExecutableSmokeAutomation.csproj` checks Settings at normal and compact sizes, picker font/row geometry, saving and reopening shortcut assignments, REC badge dragging and position persistence, capture exclusion, and real keyboard input for stop, pause/resume, and customized bindings. These keyboard tests never substitute a process launch for a key press. The separate `ExecutableWindowCaptureSmoke --installed-toggle <executable>` mode tests the installed default shortcut from idle through two start/stop cycles, including pause/resume; it requires the installed link to target that executable and refuses an already active recording. Shortcut helper restart after Windows sign-in and other monitor/DPI configurations still require manual acceptance.
 
 ### File Naming
 Files follow the pattern `rec_[timestamp].mp4`:

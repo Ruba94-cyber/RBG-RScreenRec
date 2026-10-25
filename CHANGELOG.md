@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.3 — reliable shortcuts between recordings
+
+- Keep configured keyboard shortcuts available through a small windowless helper that starts with Windows and launches the current executable.
+- Restart the helper after saving shortcut changes; removing all shortcuts also stops it and removes its Startup link.
+- Preserve the existing Start Menu links as a fallback and document how to refresh older extracted installations.
+
 ## 1.3.2 — recording controls and visibility fixes
 
 - Restore the blinking REC badge by removing an unused layered-window flag that prevented normal painting.
