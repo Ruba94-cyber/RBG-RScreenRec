@@ -50,6 +50,7 @@ namespace RScreenRec
             TopMost = true;
             ShowInTaskbar = false;
             BackColor = Color.FromArgb(24, 24, 24);
+            AccessibleName = "Recording";
             DoubleBuffered = true;
 
             Load += (s, e) =>
@@ -73,6 +74,7 @@ namespace RScreenRec
         public void SetPaused(bool value)
         {
             paused = value;
+            AccessibleName = value ? "Recording paused" : "Recording";
             if (paused)
             {
                 blinkTimer.Stop();
@@ -322,6 +324,8 @@ namespace RScreenRec
             }
         }
 
+        protected override bool ShowWithoutActivation { get { return true; } }
+
         protected override CreateParams CreateParams
         {
             get
@@ -329,7 +333,7 @@ namespace RScreenRec
                 var cp = base.CreateParams;
                 // No activation, but allow mouse interaction for dragging.
                 // WS_EX_TRANSPARENT would make the badge impossible to drag.
-                cp.ExStyle |= 0x80 | 0x8 | 0x80000 | 0x08000000; // TOOLWINDOW | TOPMOST | LAYERED | NOACTIVATE
+                cp.ExStyle |= 0x80 | 0x8 | 0x08000000; // TOOLWINDOW | TOPMOST | NOACTIVATE
                 return cp;
             }
         }

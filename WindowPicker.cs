@@ -22,6 +22,7 @@ namespace RScreenRec
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
         [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+        [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT { public int X; public int Y; }
@@ -32,27 +33,77 @@ namespace RScreenRec
         internal static IntPtr SelectWindow()
         {
             var choices = GetWindows();
+            Screen screen = Screen.FromPoint(Cursor.Position);
+            float scale = DpiHelper.GetScreenDpiScale(screen);
+            Func<int, int> px = value => DpiHelper.ScaleValue(value, scale);
             using (var dialog = new Form())
-            using (var search = new TextBox())
-            using (var list = new ListBox())
-            using (var pick = new Button())
-            using (var confirm = new Button())
-            using (var cancel = new Button())
             {
+                dialog.SuspendLayout();
                 dialog.Text = "Select window - RScreenRec";
-                dialog.StartPosition = FormStartPosition.CenterScreen;
-                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
-                dialog.MaximizeBox = false;
-                dialog.MinimizeBox = false;
-                dialog.ClientSize = new Size(560, 395);
+                dialog.AutoScaleMode = AutoScaleMode.None;
                 dialog.Font = new Font("Segoe UI", 9F);
+                dialog.StartPosition = FormStartPosition.Manual;
+                dialog.FormBorderStyle = FormBorderStyle.Sizable;
+                dialog.MinimizeBox = false;
+                dialog.TopMost = true;
+                dialog.ClientSize = new Size(
+                    Math.Min(px(680), screen.WorkingArea.Width - px(48)),
+                    Math.Min(px(430), screen.WorkingArea.Height - px(64)));
 
-                search.Location = new Point(12, 12);
-                search.Size = new Size(536, 25);
-                list.Location = new Point(12, 47);
-                list.Size = new Size(536, 278);
-                list.HorizontalScrollbar = true;
-                search.TextChanged += (sender, args) =>
+                var layout = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    Padding = new Padding(px(12)),
+                    ColumnCount = 1,
+                    RowCount = 4
+                };
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                var search = new TextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, px(8)) };
+                var list = new ListBox
+                {
+                    Dock = DockStyle.Fill,
+                    IntegralHeight = false,
+                    HorizontalScrollbar = false,
+                    Margin = new Padding(0)
+                };
+                var note = new Label
+                {
+                    Text = "Restore minimized windows before selecting them.",
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    ForeColor = Color.DimGray,
+                    Margin = new Padding(0, px(8), 0, px(8))
+                };
+                var buttons = new TableLayoutPanel
+                {
+                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    ColumnCount = 4,
+                    RowCount = 1,
+                    Margin = new Padding(0)
+                };
+                buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                var pick = new Button { Text = "Click a window...", AutoSize = true, Padding = new Padding(px(8), px(4), px(8), px(4)), Margin = new Padding(0) };
+                var confirm = new Button { Text = "Select", AutoSize = true, MinimumSize = new Size(px(88), 0), Padding = new Padding(px(8), px(4), px(8), px(4)), Margin = new Padding(px(8), 0, 0, 0), DialogResult = DialogResult.OK };
+                var cancel = new Button { Text = "Cancel", AutoSize = true, MinimumSize = new Size(px(88), 0), Padding = new Padding(px(8), px(4), px(8), px(4)), Margin = new Padding(px(8), 0, 0, 0), DialogResult = DialogResult.Cancel };
+                buttons.Controls.Add(pick, 0, 0);
+                buttons.Controls.Add(confirm, 2, 0);
+                buttons.Controls.Add(cancel, 3, 0);
+                layout.Controls.Add(search, 0, 0);
+                layout.Controls.Add(list, 0, 1);
+                layout.Controls.Add(note, 0, 2);
+                layout.Controls.Add(buttons, 0, 3);
+                dialog.Controls.Add(layout);
+                dialog.AcceptButton = confirm;
+                dialog.CancelButton = cancel;
+
+                Action filter = () =>
                 {
                     string query = search.Text.Trim();
                     list.BeginUpdate();
@@ -60,66 +111,46 @@ namespace RScreenRec
                     {
                         list.Items.Clear();
                         foreach (WindowChoice choice in choices)
-                        {
-                            if (query.Length == 0 ||
-                                choice.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                            if (query.Length == 0 || choice.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
                                 list.Items.Add(choice);
-                        }
                         if (list.Items.Count > 0) list.SelectedIndex = 0;
                     }
                     finally { list.EndUpdate(); }
                 };
-                foreach (WindowChoice choice in choices)
-                    list.Items.Add(choice);
-                if (list.Items.Count > 0) list.SelectedIndex = 0;
-
-                pick.Text = "Click a window...";
-                pick.Location = new Point(12, 350);
-                pick.Size = new Size(168, 30);
+                search.TextChanged += (sender, args) => filter();
+                filter();
                 pick.Click += (sender, args) =>
                 {
                     IntPtr selected = PickWindowByClick();
-                    if (selected == IntPtr.Zero)
-                    {
-                        dialog.Activate();
-                        return;
-                    }
+                    if (selected == IntPtr.Zero) { dialog.Activate(); return; }
                     dialog.Tag = selected;
                     dialog.DialogResult = DialogResult.OK;
                     dialog.Close();
                 };
-
-                confirm.Text = "Select";
-                confirm.Location = new Point(360, 350);
-                confirm.Size = new Size(88, 30);
-                confirm.DialogResult = DialogResult.OK;
-                cancel.Text = "Cancel";
-                cancel.Location = new Point(459, 350);
-                cancel.Size = new Size(89, 30);
-                cancel.DialogResult = DialogResult.Cancel;
-
-                var note = new Label
-                {
-                    Text = "Restore minimized windows before selecting them.",
-                    Location = new Point(12, 329),
-                    Size = new Size(536, 18),
-                    ForeColor = Color.DimGray
-                };
-                dialog.Controls.AddRange(new Control[] { search, list, note, pick, confirm, cancel });
-                dialog.AcceptButton = confirm;
-                dialog.CancelButton = cancel;
                 list.DoubleClick += (sender, args) =>
                 {
                     if (list.SelectedItem != null) dialog.DialogResult = DialogResult.OK;
                 };
+                dialog.ResumeLayout(true);
+                dialog.Location = new Point(
+                    screen.WorkingArea.Left + (screen.WorkingArea.Width - dialog.Width) / 2,
+                    screen.WorkingArea.Top + (screen.WorkingArea.Height - dialog.Height) / 2);
+                dialog.Shown += (sender, args) =>
+                {
+                    dialog.Activate();
+                    dialog.BringToFront();
+                    SetForegroundWindow(dialog.Handle);
+                    search.Focus();
+                    Logger.Log(string.Format("Picker layout: font={0}, row={1}, client={2}, list={3}, select={4}, cancel={5}",
+                        list.Font.Height, list.ItemHeight, dialog.ClientSize, list.Bounds, confirm.Bounds, cancel.Bounds));
+                };
 
-                if (dialog.ShowDialog() != DialogResult.OK)
-                    return IntPtr.Zero;
+                if (dialog.ShowDialog() != DialogResult.OK) return IntPtr.Zero;
                 if (dialog.Tag is IntPtr)
                     return IsEligibleWindow((IntPtr)dialog.Tag) ? (IntPtr)dialog.Tag : IntPtr.Zero;
-                WindowChoice choiceSelected = list.SelectedItem as WindowChoice;
-                return choiceSelected != null && IsEligibleWindow(choiceSelected.Handle)
-                    ? choiceSelected.Handle : IntPtr.Zero;
+                WindowChoice selectedChoice = list.SelectedItem as WindowChoice;
+                return selectedChoice != null && IsEligibleWindow(selectedChoice.Handle)
+                    ? selectedChoice.Handle : IntPtr.Zero;
             }
         }
 

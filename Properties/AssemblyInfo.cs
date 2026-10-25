@@ -16,7 +16,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyMetadata("Author", "Paolo Rubagotti")]
 [assembly: AssemblyMetadata("Creator", "Paolo Rubagotti")]
 [assembly: AssemblyMetadata("ContactEmail", "paolo.ruba.1913@gmail.com")]
-[assembly: AssemblyInformationalVersion("1.3.1")]
+[assembly: AssemblyInformationalVersion("1.3.2")]
 
 // Se si imposta ComVisible su false, i tipi in questo assembly non saranno visibili 
 // ai componenti COM. Se è necessario accedere a un tipo in questo assembly da 
@@ -33,5 +33,5 @@ using System.Runtime.InteropServices;
 //      Numero di build
 //      Revisione
 //
-[assembly: AssemblyVersion("1.3.1.0")]
-[assembly: AssemblyFileVersion("1.3.1.0")]
+[assembly: AssemblyVersion("1.3.2.0")]
+[assembly: AssemblyFileVersion("1.3.2.0")]

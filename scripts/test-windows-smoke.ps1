@@ -21,7 +21,7 @@ $compilerCandidates = @(
 $compiler = $compilerCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $compiler) { throw 'The .NET Framework C# compiler was not found.' }
 
-$testRoot = Join-Path $env:TEMP ('RScreenRecSmoke-' + [Guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path $root ('.audit\RScreenRecSmoke-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 $resolvedTestRoot = (Resolve-Path -LiteralPath $testRoot).Path
 $success = $false
@@ -32,6 +32,12 @@ try {
     $executableWindowHarness = Join-Path $testRoot 'ExecutableWindowCaptureSmoke.exe'
     $longHarness = Join-Path $testRoot 'LongDurationWriterSmoke.exe'
     $targetHarness = Join-Path $testRoot 'SyntheticCaptureTarget.exe'
+    $touchHarness = Join-Path $testRoot 'TouchOverlayPaintSmoke.exe'
+    & $compiler /nologo /target:exe "/out:$touchHarness" "/reference:$(Join-Path $testRoot 'RBG - RScreenRec.exe')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll (Join-Path $root 'tests\TouchOverlayPaintSmoke.cs')
+    if ($LASTEXITCODE -ne 0) { throw 'Could not compile the touch-overlay painting harness.' }
+    $touchOutput = & $touchHarness 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Touch-overlay seam painting failed: $($touchOutput -join ' ')" }
+    $touchOutput | Set-Content -LiteralPath (Join-Path $testRoot 'touch-overlay-smoke.log')
     & $compiler /nologo /target:winexe "/out:$targetHarness" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll (Join-Path $root 'tests\SyntheticCaptureTarget.cs')
     if ($LASTEXITCODE -ne 0) { throw 'Could not compile the synthetic window target.' }
     $smokeProject = Join-Path $root 'tests\RScreenRec.SmokeAutomation.csproj'
@@ -174,6 +180,7 @@ try {
     $executableOutput = Join-Path $testRoot 'actual-executable-output'
     New-Item -ItemType Directory -Path $executableOutput | Out-Null
     $executableOutputText = & $executableWindowHarness (Join-Path $testRoot 'RBG - RScreenRec.exe') $executableOutput 671 377 2>&1
+    $executableOutputText | Set-Content -LiteralPath (Join-Path $testRoot 'executable-smoke.log')
     if ($LASTEXITCODE -ne 0) { throw "Actual RScreenRec executable Shift/window capture failed: $($executableOutputText -join ' ')" }
     if (-not ($executableOutputText -join ' ').Contains('shift_picker=seen_with_shift_held') -or
         -not ($executableOutputText -join ' ').Contains('occlusion_and_resume=ok') -or
@@ -184,6 +191,9 @@ try {
         -not ($executableOutputText -join ' ').Contains('overlay_position_reloaded=true') -or
         -not ($executableOutputText -join ' ').Contains('full_screen_recording=finalized')) {
         throw "Actual-executable Shift/full-screen overlay/pause evidence was incomplete: $($executableOutputText -join ' ')"
+    }
+    foreach ($evidence in @('keyboard_ctrl_alt_r=stopped', 'keyboard_ctrl_alt_p=paused_and_resumed', 'keyboard_custom=paused_resumed_stopped', 'pause_feedback=paused_label', 'resume_feedback=recording_label', 'picker_layout=readable', 'recorder_fullscreen_window=absent')) {
+        if (-not ($executableOutputText -join ' ').Contains($evidence)) { throw "Missing mandatory keyboard/layout evidence: $evidence" }
     }
     $executableVideo = Get-ChildItem -LiteralPath $executableOutput -Filter 'rec_*.mp4' -File | Select-Object -First 1
     if (-not $executableVideo) { throw 'The actual executable did not produce an MP4 in the isolated smoke folder.' }
@@ -328,7 +338,7 @@ try {
 }
 finally {
     if ($success -and -not $KeepArtifacts) {
-        $tempPrefix = [System.IO.Path]::GetFullPath((Join-Path $env:TEMP 'RScreenRecSmoke-'))
+        $tempPrefix = [System.IO.Path]::GetFullPath((Join-Path $root '.audit\RScreenRecSmoke-'))
         if (-not $resolvedTestRoot.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
             throw "Refusing to clean a test path outside the dedicated temporary directory: $resolvedTestRoot"
         }
