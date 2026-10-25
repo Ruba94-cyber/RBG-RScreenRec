@@ -28,7 +28,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>1.3.1.%2a</ApplicationVersion>
+    <ApplicationVersion>1.3.2.%2a</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
@@ -58,6 +58,7 @@
     <Compile Include="MediaFoundationMp4Writer.cs" />
     <Compile Include="ScreenRecorder.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ActiveRecordingHotkeys.cs" />
     <Compile Include="ShortcutSettings.cs" />
     <Compile Include="VisualPreferences.cs" />
     <Compile Include="WindowPicker.cs" />

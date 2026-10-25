@@ -44,10 +44,12 @@ namespace RScreenRec
             public uint cyContact;
         }
 
-        private readonly List<Point> touchPoints = new List<Point>();
         private static readonly object ActiveTouchSync = new object();
         private static readonly List<TouchMarker> ActiveTouchPoints = new List<TouchMarker>();
+        private static readonly List<TouchMarker> VisualTouchPoints = new List<TouchMarker>();
+        private static event Action VisualTouchChanged;
         private readonly Timer cleanupTimer;
+        private bool markersPainted;
 
         private struct TouchMarker
         {
@@ -72,17 +74,13 @@ namespace RScreenRec
                 RegisterTouchWindow(Handle, 0);
                 ExcludeFromCapture(Handle);
                 BringToFront();
+                VisualTouchChanged += OnVisualTouchChanged;
             };
 
-            // Timer: clear and repaint every 500 ms
-            cleanupTimer = new Timer { Interval = 500 };
+            cleanupTimer = new Timer { Interval = 100 };
             cleanupTimer.Tick += (s, e) =>
             {
-                if (touchPoints.Count > 0)
-                {
-                    touchPoints.Clear();
-                    Invalidate();
-                }
+                if (markersPainted || GetVisualTouchPointsSnapshot().Length > 0) Invalidate();
             };
             cleanupTimer.Start();
         }
@@ -91,6 +89,7 @@ namespace RScreenRec
         {
             if (disposing)
             {
+                VisualTouchChanged -= OnVisualTouchChanged;
                 cleanupTimer.Stop();
                 cleanupTimer.Dispose();
             }
@@ -112,12 +111,6 @@ namespace RScreenRec
                             Point screenPoint = new Point(
                                 (int)Math.Round(ti.x / 100.0),
                                 (int)Math.Round(ti.y / 100.0));
-                            Point pt = PointToClient(screenPoint);
-
-                            pt.X = Math.Max(0, Math.Min(ClientSize.Width, pt.X));
-                            pt.Y = Math.Max(0, Math.Min(ClientSize.Height, pt.Y));
-
-                            touchPoints.Add(pt);
                             // Recording consumes absolute desktop coordinates, not overlay client coordinates.
                             AddActiveTouchPoint(screenPoint);
                         }
@@ -138,12 +131,16 @@ namespace RScreenRec
             int scaledRadius = DpiHelper.ScaleValue(20, dpiScale);
             int scaledBorderWidth = DpiHelper.ScaleValue(3, dpiScale);
 
-            foreach (var pt in touchPoints)
+            Point[] visualPoints = GetVisualTouchPointsSnapshot();
+            markersPainted = visualPoints.Length > 0;
+            foreach (Point screenPoint in visualPoints)
             {
+                Point pt = PointToClient(screenPoint);
                 Rectangle r = new Rectangle(
                     pt.X - scaledRadius, pt.Y - scaledRadius,
                     scaledRadius * 2, scaledRadius * 2
                 );
+                if (!r.IntersectsWith(ClientRectangle)) continue;
 
                 using (Pen border = new Pen(Color.White, scaledBorderWidth))
                 using (Brush fill = new SolidBrush(Color.Red))
@@ -154,6 +151,8 @@ namespace RScreenRec
                 }
             }
         }
+
+        protected override bool ShowWithoutActivation { get { return true; } }
 
         protected override CreateParams CreateParams
         {
@@ -196,6 +195,29 @@ namespace RScreenRec
                     Point = point,
                     ExpiresAtUtc = DateTime.UtcNow.AddMilliseconds(650)
                 });
+                VisualTouchPoints.Add(new TouchMarker
+                {
+                    Point = point,
+                    ExpiresAtUtc = DateTime.UtcNow.AddMilliseconds(500)
+                });
+            }
+            Action changed = VisualTouchChanged;
+            if (changed != null) changed();
+        }
+
+        private void OnVisualTouchChanged()
+        {
+            try { if (IsHandleCreated && !IsDisposed) BeginInvoke(new Action(Invalidate)); }
+            catch (InvalidOperationException) { }
+        }
+
+        private static Point[] GetVisualTouchPointsSnapshot()
+        {
+            lock (ActiveTouchSync)
+            {
+                DateTime now = DateTime.UtcNow;
+                VisualTouchPoints.RemoveAll(marker => marker.ExpiresAtUtc <= now);
+                return VisualTouchPoints.ConvertAll(marker => marker.Point).ToArray();
             }
         }
 

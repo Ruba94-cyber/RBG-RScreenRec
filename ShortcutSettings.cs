@@ -12,6 +12,14 @@ namespace RScreenRec
     /// </summary>
     internal static class ShortcutSettings
     {
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        private static extern void SHChangeNotify(uint eventId, uint flags, string item1, IntPtr item2);
+
+        private static void NotifyShortcutChanged(string path, uint eventId)
+        {
+            if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RBG_SHORTCUT_TEST_ROOT"))) return;
+            SHChangeNotify(eventId, 0x1005, path, IntPtr.Zero); // PATHW | FLUSH
+        }
         private const string ShortcutFolderName = "RBG Utilities";
 
         [DllImport("user32.dll")]
@@ -24,102 +32,161 @@ namespace RScreenRec
             bool recorder = applicationName.IndexOf("RScreenRec", StringComparison.OrdinalIgnoreCase) >= 0;
             const string thirdMode = "Pause / resume";
             const string thirdArgument = "--toggle-pause";
-            using (var dialog = new Form
+            Screen screen = Screen.FromPoint(Cursor.Position);
+            using (var dialog = new Form())
             {
-                Text = applicationName + " - Settings",
-                StartPosition = FormStartPosition.CenterScreen,
-                FormBorderStyle = FormBorderStyle.Sizable,
-                MaximizeBox = true,
-                MinimizeBox = false,
-                ShowInTaskbar = true,
-                AutoScaleDimensions = new SizeF(96F, 96F),
-                AutoScaleMode = AutoScaleMode.Dpi,
-                AutoScroll = true,
-                ClientSize = new Size(550, recorder ? 490 : 445),
-                Font = new Font("Segoe UI", 9F)
-            })
-            {
+                dialog.Text = applicationName + " - Settings";
+                dialog.AutoScaleMode = AutoScaleMode.None;
+                dialog.Font = new Font("Segoe UI", 10F);
+                dialog.StartPosition = FormStartPosition.Manual;
+                dialog.Location = screen.WorkingArea.Location;
+                dialog.FormBorderStyle = FormBorderStyle.Sizable;
+                dialog.MaximizeBox = true;
+                dialog.MinimizeBox = false;
+                dialog.BackColor = SystemColors.Window;
+                float scale;
+                using (Graphics graphics = dialog.CreateGraphics()) scale = graphics.DpiX / 96F;
+                Func<int, int> px = value => (int)Math.Round(value * scale);
+                dialog.ClientSize = new Size(
+                    Math.Min(px(660), screen.WorkingArea.Width - px(48)),
+                    Math.Min(px(recorder ? 520 : 470), screen.WorkingArea.Height - px(64)));
+
+                var outer = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill, Padding = new Padding(px(20)),
+                    ColumnCount = 1, RowCount = 3
+                };
+                outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                outer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                outer.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 var introduction = new Label
                 {
-                    Location = new Point(22, 18),
-                    Size = new Size(506, 52),
-                    Text = "Assign Ctrl+Alt+letter or Ctrl+Alt+F1-F12 combinations.\r\nPress Delete in a shortcut box to remove the assignment."
+                    AutoSize = true, Dock = DockStyle.Fill,
+                    Text = "Choose your keyboard shortcuts and visual preferences.",
+                    Margin = new Padding(0, 0, 0, px(16))
                 };
-                var firstLabel = new Label
+                var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Margin = new Padding(0) };
+                var fields = new TableLayoutPanel
                 {
-                    Location = new Point(22, 80), Size = new Size(506, 25), Text = firstMode
+                    Dock = DockStyle.Top, AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 2,
+                    RowCount = 0, Padding = new Padding(0, 0, px(8), 0)
                 };
-                var firstInput = CreateShortcutInput(22, 110, 506);
+                fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+                fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+                Action<Control, Control> addRow = (label, control) =>
+                {
+                    int row = fields.RowCount++;
+                    fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    label.Dock = DockStyle.Fill;
+                    label.Margin = new Padding(0, px(5), px(12), px(12));
+                    control.Dock = DockStyle.Fill;
+                    control.Margin = new Padding(0, 0, 0, px(12));
+                    fields.Controls.Add(label, 0, row);
+                    fields.Controls.Add(control, 1, row);
+                };
+                Action<Control> addFullRow = control =>
+                {
+                    int row = fields.RowCount++;
+                    fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                    control.Dock = DockStyle.Fill;
+                    fields.Controls.Add(control, 0, row);
+                    fields.SetColumnSpan(control, 2);
+                };
+                var shortcutsTitle = new Label
+                {
+                    Text = "Keyboard shortcuts", AutoSize = true,
+                    Font = new Font(dialog.Font, FontStyle.Bold),
+                    Margin = new Padding(0, 0, 0, px(8))
+                };
+                addFullRow(shortcutsTitle);
+                addFullRow(new Label
+                {
+                    Text = "Press Ctrl+Alt+letter or Ctrl+Alt+F1–F12 in a box. Add Shift if needed. Press Delete to clear.",
+                    AutoSize = true, ForeColor = Color.DimGray, Margin = new Padding(0, 0, 0, px(16))
+                });
+                var firstInput = CreateShortcutInput(0, 0, px(250));
+                firstInput.AccessibleName = firstMode + " shortcut";
                 firstInput.Text = ReadShortcut(applicationName, firstMode) ?? firstSuggestion;
-                var secondLabel = new Label
-                {
-                    Location = new Point(22, 155), Size = new Size(506, 25), Text = secondMode
-                };
-                var secondInput = CreateShortcutInput(22, 185, 506);
+                addRow(new Label { Text = firstMode, AutoSize = true }, firstInput);
+                var secondInput = CreateShortcutInput(0, 0, px(250));
+                secondInput.AccessibleName = secondMode + " shortcut";
                 secondInput.Text = ReadShortcut(applicationName, secondMode) ?? secondSuggestion;
-
-                var thirdLabel = new Label
-                {
-                    Location = new Point(22, 230), Size = new Size(506, 25),
-                    Text = thirdMode, Visible = recorder
-                };
-                var thirdInput = CreateShortcutInput(22, 260, 506);
-                thirdInput.Visible = recorder;
+                addRow(new Label { Text = secondMode, AutoSize = true }, secondInput);
+                TextBox thirdInput = null;
                 if (recorder)
+                {
+                    thirdInput = CreateShortcutInput(0, 0, px(250));
+                    thirdInput.AccessibleName = "Pause / resume shortcut";
                     thirdInput.Text = ReadShortcut(applicationName, thirdMode) ?? "Ctrl+Alt+P";
-
-                var badgeLabel = new Label
+                    addRow(new Label { Text = thirdMode, AutoSize = true }, thirdInput);
+                }
+                addFullRow(new Label
                 {
-                    Text = "REC badge size (%)", Location = new Point(22, 315),
-                    Size = new Size(280, 28), Visible = recorder
-                };
-                var badgeScale = new NumericUpDown
+                    Text = recorder ? "Recording appearance" : "Capture appearance",
+                    Font = new Font(dialog.Font, FontStyle.Bold), AutoSize = true,
+                    Margin = new Padding(0, px(10), 0, px(16))
+                });
+                NumericUpDown badgeScale = null;
+                NumericUpDown fadeDuration = null;
+                CheckBox magnifier = null;
+                if (recorder)
                 {
-                    Location = new Point(418, 310), Size = new Size(110, 32),
-                    Minimum = 70, Maximum = 130, Increment = 5,
-                    Value = VisualPreferences.BadgeSizePercent, Visible = recorder
-                };
-
-                var borderLabel = new Label
+                    badgeScale = new NumericUpDown
+                    {
+                        Minimum = 70, Maximum = 130, Increment = 5,
+                        Value = VisualPreferences.BadgeSizePercent, AccessibleName = "REC badge size (%)"
+                    };
+                    addRow(new Label { Text = "REC badge size (%)", AutoSize = true }, badgeScale);
+                }
+                else
                 {
-                    Text = "Cyan border fade (milliseconds)", Location = new Point(22, 236),
-                    Size = new Size(340, 28), Visible = !recorder
-                };
-                var fadeDuration = new NumericUpDown
+                    fadeDuration = new NumericUpDown
+                    {
+                        Minimum = 120, Maximum = 500, Increment = 20,
+                        Value = VisualPreferences.BorderFadeDurationMs, AccessibleName = "Cyan border fade (milliseconds)"
+                    };
+                    addRow(new Label { Text = "Cyan border fade (milliseconds)", AutoSize = true }, fadeDuration);
+                    magnifier = new CheckBox
+                    {
+                        Text = "Show optional pixel magnifier when selecting an area",
+                        AutoSize = true, Checked = VisualPreferences.SelectionMagnifierEnabled,
+                        Margin = new Padding(0, 0, 0, px(12))
+                    };
+                    addFullRow(magnifier);
+                }
+                addFullRow(new Label
                 {
-                    Location = new Point(418, 231), Size = new Size(110, 32),
-                    Minimum = 120, Maximum = 500, Increment = 20,
-                    Value = VisualPreferences.BorderFadeDurationMs, Visible = !recorder
-                };
-                var magnifier = new CheckBox
+                    AutoSize = true, ForeColor = Color.DimGray,
+                    Text = recorder
+                        ? "Press a recording shortcut again to stop. Pause / resume keeps the video open.\r\nIf you move this app, save the shortcuts again from its new location."
+                        : "Save to enable the shortcuts. If you move this app, save them again from its new location.",
+                    Margin = new Padding(0, px(8), 0, 0)
+                });
+                viewport.Controls.Add(fields);
+                var footer = new FlowLayoutPanel
                 {
-                    Text = "Show optional pixel magnifier when selecting an area",
-                    Location = new Point(22, 274), Size = new Size(506, 30),
-                    Checked = VisualPreferences.SelectionMagnifierEnabled,
-                    Visible = !recorder
+                    AutoSize = true, Dock = DockStyle.Fill, WrapContents = false,
+                    FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(0, px(16), 0, 0)
                 };
-
-                var note = new Label
-                {
-                    Location = new Point(22, recorder ? 354 : 315),
-                    Size = new Size(506, 50),
-                    ForeColor = Color.DimGray,
-                    Text = "Windows Explorer handles global shortcuts; no background app.\r\nIf the executable is moved, save shortcuts again."
-                };
-
                 var saveButton = new Button
                 {
-                    Text = "Save settings",
-                    Location = new Point(300, recorder ? 420 : 382),
-                    Size = new Size(137, 34)
+                    Text = "Save settings", AutoSize = true,
+                    Padding = new Padding(px(12), px(6), px(12), px(6)),
+                    MinimumSize = new Size(px(130), 0), Margin = new Padding(px(8), 0, 0, 0)
                 };
                 var cancelButton = new Button
                 {
-                    Text = "Cancel",
-                    Location = new Point(448, recorder ? 420 : 382),
-                    Size = new Size(80, 34),
-                    DialogResult = DialogResult.Cancel
+                    Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel,
+                    Padding = new Padding(px(12), px(6), px(12), px(6)),
+                    MinimumSize = new Size(px(100), 0), Margin = new Padding(px(8), 0, 0, 0)
                 };
+                footer.Controls.Add(cancelButton);
+                footer.Controls.Add(saveButton);
+                outer.Controls.Add(introduction, 0, 0);
+                outer.Controls.Add(viewport, 0, 1);
+                outer.Controls.Add(footer, 0, 2);
+                dialog.Controls.Add(outer);
                 saveButton.Click += (sender, args) =>
                 {
                     string first = firstInput.Text.Trim();
@@ -192,38 +259,21 @@ namespace RScreenRec
                             applicationName, MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 };
-
-                dialog.Controls.AddRange(new Control[]
-                {
-                    introduction, firstLabel, firstInput, secondLabel, secondInput,
-                    thirdLabel, thirdInput, badgeLabel, badgeScale, borderLabel,
-                    fadeDuration, magnifier, note, saveButton, cancelButton
-                });
                 dialog.AcceptButton = saveButton;
                 dialog.CancelButton = cancelButton;
+                dialog.Location = new Point(
+                    screen.WorkingArea.Left + (screen.WorkingArea.Width - dialog.Width) / 2,
+                    screen.WorkingArea.Top + (screen.WorkingArea.Height - dialog.Height) / 2);
                 dialog.Shown += (sender, args) =>
                 {
-                    Rectangle workArea = Screen.FromControl(dialog).WorkingArea;
-                    int maxWidth = Math.Max(1, workArea.Width - 24);
-                    int maxHeight = Math.Max(1, workArea.Height - 48);
-                    if (dialog.Width > maxWidth || dialog.Height > maxHeight)
-                    {
-                        dialog.Size = new Size(
-                            Math.Min(dialog.Width, maxWidth),
-                            Math.Min(dialog.Height, maxHeight));
-                    }
-
-                    dialog.Location = new Point(
-                        workArea.Left + Math.Max(0, (workArea.Width - dialog.Width) / 2),
-                        workArea.Top + Math.Max(0, (workArea.Height - dialog.Height) / 2));
                     dialog.TopMost = true;
                     dialog.Activate();
                     dialog.BringToFront();
                     SetForegroundWindow(dialog.Handle);
+                    firstInput.Focus();
                     dialog.BeginInvoke((Action)(() =>
                     {
-                        if (dialog.IsDisposed)
-                            return;
+                        if (dialog.IsDisposed) return;
                         dialog.TopMost = false;
                         dialog.Activate();
                         SetForegroundWindow(dialog.Handle);
@@ -356,7 +406,7 @@ namespace RScreenRec
             }
         }
 
-        private static string ReadShortcut(string applicationName, string mode)
+        internal static string ReadShortcut(string applicationName, string mode)
         {
             string path = GetShortcutPath(applicationName, mode);
             if (!File.Exists(path))
@@ -391,20 +441,27 @@ namespace RScreenRec
             if (string.IsNullOrEmpty(hotkey))
             {
                 if (File.Exists(path))
+                {
                     File.Delete(path);
+                    NotifyShortcutChanged(path, 0x4);
+                }
                 return;
             }
-
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType == null)
-                throw new NotSupportedException("Windows Script Host is not available.");
-
+            if (shellType == null) throw new NotSupportedException("Windows Script Host is not available.");
             object shell = null;
             object shortcut = null;
+            byte[] previous = File.Exists(path) ? File.ReadAllBytes(path) : null;
             try
             {
                 shell = Activator.CreateInstance(shellType);
+                // A fresh link registration is required: editing a cached key may leave it inactive.
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    NotifyShortcutChanged(path, 0x4); // DELETE
+                }
                 shortcut = ((dynamic)shell).CreateShortcut(path);
                 dynamic link = shortcut;
                 link.TargetPath = Application.ExecutablePath;
@@ -414,6 +471,25 @@ namespace RScreenRec
                 link.IconLocation = Application.ExecutablePath + ",0";
                 link.Hotkey = hotkey;
                 link.Save();
+                NotifyShortcutChanged(path, 0x2); // CREATE
+            }
+            catch
+            {
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                        NotifyShortcutChanged(path, 0x4);
+                    }
+                    if (previous != null)
+                    {
+                        File.WriteAllBytes(path, previous);
+                        NotifyShortcutChanged(path, 0x2);
+                    }
+                }
+                catch (Exception restoreError) { System.Diagnostics.Debug.WriteLine(restoreError); }
+                throw;
             }
             finally
             {

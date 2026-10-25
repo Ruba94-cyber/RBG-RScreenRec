@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.2 — recording controls and visibility fixes
+
+- Restore the blinking REC badge by removing an unused layered-window flag that prevented normal painting.
+- Handle configured stop and pause keys inside the active recorder, including `Ctrl+Alt+R` and `Ctrl+Alt+P`, without requiring Explorer to launch another process. Remove the keyboard listener when recording ends.
+- Split touch feedback into nonactivating tiles so no recorder window covers an entire monitor and suppresses Start-menu shortcut activation.
+- Use native list rows and text-sized controls in the window picker to prevent overlapping entries and clipped buttons at high DPI.
+- Apply the same text-sized layout to Settings, with a scrollable body and always-visible Save/Cancel actions.
+- Refresh Windows shortcut registration on save, including when the same keyboard combination is saved again.
+- Require actual keyboard input and rendered layout checks in the executable smoke; never substitute process launches for keyboard acceptance.
+
 ## 1.3.1 — settings, recording stop, and REC badge polish
 
 - Keep the Ctrl+Shift settings dialog fully visible and resizable across display scaling and smaller work areas, and bring it to the foreground when opened.

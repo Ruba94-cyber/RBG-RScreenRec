@@ -57,9 +57,8 @@ namespace RScreenRec
             bool forceScreen = HasArgument(args, "--record-screen");
             bool shiftHeld = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
             bool controlHeld = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-            bool settingsRequested = HasArgument(args, "--settings") ||
-                (!forceWindow && !forceScreen && shiftHeld && controlHeld);
-            if (settingsRequested)
+            bool settingsRequestedByModifier = !forceWindow && !forceScreen && shiftHeld && controlHeld;
+            if (HasArgument(args, "--settings"))
             {
                 ShortcutSettings.Show("RBG RScreenRec", "Screen recording", "Window recording",
                     "--record-screen", "--record-window", "Ctrl+Alt+R", "Ctrl+Alt+W");
@@ -74,6 +73,13 @@ namespace RScreenRec
                 {
                     SignalStop();
                     return; // second launch only stops the running recorder
+                }
+
+                if (settingsRequestedByModifier)
+                {
+                    ShortcutSettings.Show("RBG RScreenRec", "Screen recording", "Window recording",
+                        "--record-screen", "--record-window", "Ctrl+Alt+R", "Ctrl+Alt+W");
+                    return;
                 }
 
                 // Clear only stale fallback requests before publishing the stop event.
@@ -147,34 +153,41 @@ namespace RScreenRec
                         return;
                     }
 
-                    OverlayHost touchOverlay = selectedWindow == IntPtr.Zero
-                        ? OverlayHost.Start("TouchOverlay", () => new TouchOverlayForm(bounds)) : null;
+                    OverlayHost[] touchOverlays = selectedWindow == IntPtr.Zero
+                        ? StartTouchOverlays(bounds) : new OverlayHost[0];
                     Rectangle overlayBounds = selectedWindow == IntPtr.Zero
                         ? bounds : Screen.FromHandle(selectedWindow).Bounds;
                     OverlayHost recordingOverlay = OverlayHost.Start("RecordingOverlay",
                         () => new RecordingOverlayForm(overlayBounds));
 
+                    ActiveRecordingHotkeys activeHotkeys = null;
+                    try { activeHotkeys = new ActiveRecordingHotkeys(() => stopEvent.Set(), () => pauseEvent.Set()); }
+                    catch (Exception ex) { Logger.Log("Could not start active recording hotkeys.", ex); }
+
                     // Wait until stop is requested or recording ends
                     bool stopRequested = false;
-                    while (recorder.IsRecording)
+                    try
                     {
-                        if (stopEvent.WaitOne(20) || File.Exists(StopRequestPath))
+                        while (recorder.IsRecording)
                         {
-                            stopRequested = true;
-                            break;
-                        }
-                        if (pauseEvent.WaitOne(0))
-                        {
-                            bool paused = recorder.TogglePause();
-                            if (recordingOverlay != null) recordingOverlay.SetPaused(paused);
+                            if (stopEvent.WaitOne(20) || File.Exists(StopRequestPath))
+                            {
+                                stopRequested = true;
+                                break;
+                            }
+                            if (pauseEvent.WaitOne(0))
+                            {
+                                bool paused = recorder.TogglePause();
+                                if (recordingOverlay != null) recordingOverlay.SetPaused(paused);
+                            }
                         }
                     }
-
+                    finally { if (activeHotkeys != null) activeHotkeys.Dispose(); }
                     if (stopRequested)
                     {
                         Logger.Log("Stop request detected; closing overlays immediately.");
                         if (recordingOverlay != null) recordingOverlay.CloseNow();
-                        if (touchOverlay != null) touchOverlay.CloseNow();
+                        foreach (OverlayHost touchOverlay in touchOverlays) touchOverlay.CloseNow();
                     }
 
                     try
@@ -189,10 +202,24 @@ namespace RScreenRec
                     }
                     TryDeleteStopRequest();
                     if (recordingOverlay != null) recordingOverlay.Dispose();
-                    if (touchOverlay != null) touchOverlay.Dispose();
+                    foreach (OverlayHost touchOverlay in touchOverlays) touchOverlay.Dispose();
                     }
                 }
             }
+        }
+
+        private static OverlayHost[] StartTouchOverlays(Rectangle bounds)
+        {
+            // A monitor-sized top-level window can make Explorer suppress Start-menu hotkeys.
+            // Two nonactivating tiles cover the same pixels without a fullscreen window.
+            int leftWidth = bounds.Width / 2;
+            Rectangle left = new Rectangle(bounds.Left, bounds.Top, leftWidth, bounds.Height);
+            Rectangle right = new Rectangle(bounds.Left + leftWidth, bounds.Top, bounds.Width - leftWidth, bounds.Height);
+            return new[]
+            {
+                OverlayHost.Start("TouchOverlayLeft", () => new TouchOverlayForm(left)),
+                OverlayHost.Start("TouchOverlayRight", () => new TouchOverlayForm(right))
+            };
         }
 
         private static string CreateOutputPath(string folder)
@@ -218,11 +245,14 @@ namespace RScreenRec
             try
             {
                 using (var pauseEvent = EventWaitHandle.OpenExisting(PauseEventName))
+                {
                     pauseEvent.Set();
+                    Logger.Log("Pause toggle signal requested. Success=True");
+                }
             }
             catch (WaitHandleCannotBeOpenedException)
             {
-                // Pausing is meaningful only when an existing recording is active.
+                Logger.Log("Pause toggle signal requested. Success=False; no active recorder published its pause event.");
             }
             catch (Exception ex)
             {
