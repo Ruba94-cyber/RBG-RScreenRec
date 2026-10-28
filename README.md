@@ -1,214 +1,47 @@
-# RBG - RScreenRec - Advanced Screen Recording Tool
+# RBG - RScreenRec
 
-A C# desktop application for advanced screen recording with visual overlays and touch input support.
+**Simple screen and window recording for Windows.** Record one monitor or a specific application window, then save directly to MP4.
 
-Author: Paolo Rubagotti.
+## Download
 
-Windows release executables are Authenticode-signed with Paolo Rubagotti's self-signed code-signing certificate. Each release includes the public `.cer` and its SHA-256 fingerprint; the private `.pfx` is never distributed. Because this certificate is self-signed rather than issued by a public CA, Windows can still show an unknown-publisher or SmartScreen warning until the user chooses to trust it.
+[Download the latest release](https://github.com/Ruba94-cyber/RBG-RScreenRec/releases/latest), extract the ZIP, and run `RBG - RScreenRec.exe`.
+
+Requires Windows and .NET Framework 4.8. No separate video encoder or installation wizard is needed.
 
 ## Features
 
-### 🎥 Screen Recording
-- **Multi-monitor aware**: Automatically records the monitor under the mouse cursor.
-- **Screen-format safe**: Supports standard, ultrawide, portrait, 16:10, 4:3, and odd pixel dimensions without cropping.
-- **Compact H.264 encoding**: 30 FPS with a constant-quality profile tuned for readable screen text and controlled file size.
-- **Variable file size**: Output depends on resolution and screen motion. A 3-second, 1920x1200 synthetic office-UI clip encoded at quality 60 was 224,742 bytes; a simple linear scale would be about 270 MB/hour for that test content. This is an illustration, not a prediction or a file-size limit; changing video and higher resolutions can be substantially larger.
-- **DPI aware**: Handles high-resolution displays and mixed-DPI coordinate spaces.
-- **Portable single executable**: No FFmpeg, codecs, or helper binaries are shipped beside the app.
-- **Automatic file management**: Timestamped filenames avoid slow startup scans.
+- **Screen recording:** captures the monitor under your mouse pointer, including cursor and touch highlights.
+- **Window recording:** captures only the selected application window, without other overlapping windows or desktop notifications. Continue using other apps while recording.
+- **Ready-to-share MP4:** H.264 video at 30 FPS.
+- **Pause and resume:** skip breaks without adding frozen time to the video.
+- **Recording indicator:** a draggable REC badge remembers its position and changes to PAUSE when paused; adjust its size in Settings.
+- **Multiple displays:** handles different monitor sizes, orientations, and display scaling.
 
-### 🎯 Visual Overlays
-- **Recording indicator**: Blinking dot to show active recording.
-- **Mouse cursor overlay**: Highlights the cursor in recordings with a red dot.
-- **Touch overlay**: Displays touch input using red, outlined circles.
+## How to use
 
-### 🔧 Technical Capabilities
-- **File locking**: Prevents multiple instances from running simultaneously.
-- **Thread-safe design**: Safe coordination of overlay and recording threads.
-- **Robust error handling**: Comprehensive exception management.
-- **Performance tuned**: Minimal allocations and efficient resource usage.
+| Action | What to do |
+| --- | --- |
+| **Start screen recording** | Open `RBG - RScreenRec.exe` normally. |
+| **Record a window** | Hold **Shift** while opening the app, then select a window, search by title, or use **Click a window...** |
+| **Stop and save** | Open the executable again, or press a configured recording shortcut. |
+| **Open Settings** | Hold **Ctrl + Shift** while opening the executable. |
 
-## System Requirements
+Videos are saved automatically to `%USERPROFILE%\Videos\Captures\` as `rec_[timestamp].mp4`.
 
-- **Operating System**: Windows 7 or later
-- **.NET Framework**: 4.8
-- **Hardware**: DirectX-compatible graphics adapter for screen capture
-- **Window capture**: Windows Graphics Capture is the preferred backend on Windows 10 version 1803 or later. Older or unsupported configurations may use the PrintWindow compatibility backend, which can return incomplete frames.
-- **Touch**: Optional Windows Touch support for the touch overlay
+### Optional keyboard shortcuts
 
-## Usage
+Open Settings, choose your shortcuts, and select **Save settings** to enable them. Suggested combinations:
 
-### Quick Start
-```bash
-"RBG - RScreenRec.exe"
-```
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl + Alt + R` | Start/stop screen recording |
+| `Ctrl + Alt + W` | Start/stop window recording |
+| `Ctrl + Alt + P` | Pause/resume the current recording |
 
-### How it works
-1. **First launch**: Detects the current monitor and starts recording immediately.
-2. **Second launch**: Stops the current recording if one is running.
-3. **Output files**: Videos are saved to `%USERPROFILE%\Videos\Captures\`.
+Shortcuts are customizable and **are not enabled until you save them**. A small background helper keeps them working when the recorder is closed and starts with Windows. Clear all assignments and save to disable it. If you move the executable, save your shortcuts again.
 
-### Recording a window
+**Window recording limitation:** Restore a minimized window before selecting it. When a recorded window is minimized, Windows may stop updating its content: RScreenRec keeps the last available frame until the window is restored. Some protected or GPU-rendered windows may not capture correctly.
 
-1. Hold **Shift** while launching RBG - RScreenRec.
-2. Select a visible window from the list.
-3. Continue using other applications; window mode captures only the selected window and does not use desktop capture as a fallback.
-4. Launch `RBG - RScreenRec.exe` again to stop and finalize the MP4.
+## Support the project
 
-### Configurable keyboard shortcuts
-
-Hold **Ctrl+Shift while launching the executable** to open Shortcut Settings.
-Choose separate combinations for **screen recording** and **window recording**.
-The suggested defaults are `Ctrl+Alt+R` (screen), `Ctrl+Alt+W` (window), and `Ctrl+Alt+P` (pause/resume). No hotkey is installed until you click **Save settings**.
-
-- Click a shortcut box and press **Ctrl+Alt+letter** or **Ctrl+Alt+F1–F12** (optionally with Shift).
-- Press **Delete** to clear a shortcut, then save to remove its Windows link.
-- The application creates per-user Start Menu shortcuts in `RBG Utilities`. A small windowless shortcut helper stays active between recordings and starts again at Windows sign-in. It handles only the configured combinations; it does not save typed keys. During recording, RScreenRec also handles stop and pause directly. The Start Menu links remain available if the helper is stopped. Clear all shortcuts and save to stop the helper and remove its Startup link. The settings dialog checks collisions between both RBG utilities, but Windows and unrelated applications may still reserve combinations.
-- If you move or rename the executable, reopen settings from its new location and save again.
-- Settings uses text-sized fields and a scrollable body; Save and Cancel remain visible when the window is resized.
-- The original direct-executable behavior remains unchanged: normal launch starts/stops screen recording, Shift+launch requests window capture, and Ctrl+Shift+launch opens settings. The two hotkeys launch the respective modes; when a recording is already active, either launch stops it.
-
-**REC badge:** A smaller blinking REC badge appears during screen and window recording. Drag the badge to move it; its position persists across launches. Adjust its size (70–130%) in settings. When paused, an amber PAUSE label replaces the blinking REC indicator. The app asks Windows to exclude the indicator from captures when supported, but exclusion is dependent on the Windows version and capture backend.
-
-### Pause and resume
-
-The optional pause shortcut (suggested `Ctrl+Alt+P`) toggles pause/resume during an active recording, using a lightweight Windows event. The MP4 timeline excludes the pause interval, so playback does not contain a long frozen pause. The recorder remains open during pauses and the existing second-launch behavior still stops and finalizes the video. The explicit `--toggle-pause` argument does nothing if no recording is running.
-
-### Improved window picker
-
-Type part of a window title to filter the list, or choose **Click a window...** and click the target directly. Restore minimized targets before starting capture. After recording begins, minimize/restore is handled according to the Windows Graphics Capture or PrintWindow limitations explained below.
-
-### Release download
-
-Download `RBG-RScreenRec-1.3.3-windows-x64.zip` from GitHub Releases, extract the archive, then run `RBG - RScreenRec.exe`. Open Settings from this new executable and save once to update shortcuts that still point to an older extracted version.
-
-The archive contains `Paolo-Rubagotti-CodeSigning.cer` and `CERTIFICATE-FINGERPRINT-SHA256.txt`. On a PC you administer, import the `.cer` into **Trusted Root Certification Authorities** and **Trusted Publishers** before running the app to have Windows recognize this specific signer. Verify the fingerprint against the one published with the release before trusting it. SmartScreen reputation warnings can remain even after importing a self-signed certificate.
-
-Windows Graphics Capture is used when available. If it cannot be initialized, RScreenRec warns before using PrintWindow compatibility capture; some GPU-rendered or protected windows may then appear blank or incomplete. When a target is minimized, Windows may stop rendering it. RScreenRec keeps the last captured image in the video timeline and resumes with new frames after the window is restored; this is not live capture while minimized.
-
-The H.264 profile preserves a 30 FPS output timeline and does not deliberately reduce the frame rate to shrink files. Repeated samples hold the last complete image when the capture source has no new frame. Quality-based encoding has no strict file-size cap, so rapidly changing full-screen content can produce much larger files than a mostly static desktop. In a 3-second, 1920x1200 synthetic office-UI comparison, quality 60 produced a 224,742-byte clip (56.9% smaller than quality 35 at 521,487 bytes). First-frame SSIM against the source image was 0.9913 at quality 60 and 0.9573 at quality 35. Quality 30 was 39.5% smaller than quality 60, but visibly lost fine lines and measured 0.9214 SSIM, so quality 60 is the current size/readability balance. These short synthetic tests do not predict every screen or encoder. A synthetic 3601-second, 30 FPS writer run is also checked for timestamps, finalization, and full decoding; this validates long MP4 timelines, not a 60-minute interactive capture session or its resulting file size.
-
-### Windows smoke tests
-
-Run `scripts/test-windows-smoke.ps1` in an interactive Windows session. It also validates a pause/resume case by checking the resulting MP4 duration and full decoding. It builds the Release app, automates the window picker against a separate synthetic process, exercises odd-landscape, portrait, and panoramic WGC capture, checks occlusion, resize, minimize/restore, selected-window closure, and validates every MP4 with FFmpeg. It also writes a synthetic timeline longer than one hour. The test runner requires the .NET Framework C# compiler plus `ffmpeg.exe` and `ffprobe.exe` on `PATH`; these are development tools and are not shipped with RScreenRec. Successful runs remove their temporary media, while failed runs retain the artifacts for diagnosis.
-
-Additional FlaUI coverage in `tests/RScreenRec.SettingsUiAutomation.csproj` and `tests/RScreenRec.ExecutableSmokeAutomation.csproj` checks Settings at normal and compact sizes, picker font/row geometry, saving and reopening shortcut assignments, REC badge dragging and position persistence, capture exclusion, and real keyboard input for stop, pause/resume, and customized bindings. These keyboard tests never substitute a process launch for a key press. The separate `ExecutableWindowCaptureSmoke --installed-toggle <executable>` mode tests the installed default shortcut from idle through two start/stop cycles, including pause/resume; it requires the installed link to target that executable and refuses an already active recording. Shortcut helper restart after Windows sign-in and other monitor/DPI configurations still require manual acceptance.
-
-### File Naming
-Files follow the pattern `rec_[timestamp].mp4`:
-- **timestamp**: Uses the format `yyyy-MM-dd_HH-mm-ss-fff`.
-
-Example: `rec_2026-06-04_16-22-40-234.mp4`
-
-## Code Architecture
-
-### Key Components
-
-#### `Program.cs`
-- Application entry point.
-- Manages the lock file used to prevent multiple instances.
-- Coordinates threads used for overlays.
-- Controls the application lifecycle.
-
-#### `ScreenRecorder.cs`
-- Core engine responsible for screen capture.
-- Generates MP4 files through the native Media Foundation writer.
-- Thread-safe management of recording loops.
-- Integrates mouse cursor overlay.
-
-#### `MediaFoundationMp4Writer.cs`
-- Thin COM/PInvoke wrapper around Windows Media Foundation.
-- Writes H.264 video into an MP4 container.
-- Uses a constant-quality H.264 profile and explicit timestamps and durations for normal playback speed and long recordings.
-
-#### `FrameSources.cs`
-- Uses Windows Graphics Capture for selected windows when available, with PrintWindow compatibility capture if WGC initialization fails.
-- Keeps selected-window frames independent of other desktop windows; the compatibility backend may not render every GPU or protected surface correctly.
-
-#### `RecordingOverlayForm.cs`
-- Transparent overlay indicating active recording.
-- Always-on-top window with custom blinking animation.
-- Automatically positioned on the screen.
-
-#### `TouchOverlayForm.cs`
-- Captures and renders touch input events.
-- Displays full-screen transparent overlay.
-- Cleans up visual touch indicators automatically.
-
-## Advanced Configuration
-
-### Performance Tuning
-- **FPS**: 30 FPS, configured in `ScreenRecorder.cs`.
-- **Quality/size**: H.264 constant-quality profile 60; actual file size varies with scene motion, resolution, and the Windows encoder. The app does not impose a maximum file size or intentionally drop frames to reduce storage.
-- **Buffer size**: Automatically determined from the selected capture dimensions.
-
-### Overlay Customization
-- **Indicator position**: Drag the REC badge; saved per-user and constrained to visible monitors.
-- **Colors**: Modify the overlay classes to adjust colors.
-- **Sizes**: REC badge size is adjustable in the built-in Ctrl+Shift settings dialog.
-
-## Troubleshooting
-
-### Common Issues
-
-**Recording does not start**
-- Verify permissions for the output folder.
-- Check available disk space.
-- Ensure no other instance is running.
-
-**Low performance**
-- Close unnecessary applications.
-- Monitor CPU and memory usage.
-- Reduce screen resolution if needed.
-
-**Overlays not visible**
-- Check Windows DPI settings.
-- Review multi-monitor configuration.
-- Restart with administrator privileges if required.
-
-### Logging
-Runtime logs are written to `%TEMP%\screenrec.log`.
-
-## Development
-
-### Build Requirements
-- Visual Studio 2019 or later
-- .NET Framework 4.8 SDK
-- Windows SDK for touch functionality
-
-### Project Structure
-```
-RScreenRec/
-├── Program.cs              # Entry point
-├── ScreenRecorder.cs       # Core recording engine
-├── MediaFoundationMp4Writer.cs # Native MP4/H.264 writer
-├── RecordingOverlayForm.cs # Recording indicator overlay
-├── TouchOverlayForm.cs     # Touch input overlay
-├── RScreenRec.csproj       # Project configuration
-└── README.md               # Documentation
-```
-
-### Build Commands
-```bash
-# Debug build (produces `RBG - RScreenRec.exe` in `bin\\Debug`)
-msbuild RScreenRec.csproj /p:Configuration=Debug
-
-# Release build (produces `RBG - RScreenRec.exe` in `bin\\Release`)
-msbuild RScreenRec.csproj /p:Configuration=Release
-```
-
-## License
-
-This project is distributed under the MIT License. © 2025 Paolo Rubagotti. See the `LICENSE` file for details.
-
-## Contributing
-
-Contributions are welcome! To contribute:
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/new-feature`).
-3. Commit your changes with clear messages.
-4. Open a pull request describing your changes.
-
-## Support
-
-If RScreenRec helps you work faster, you can buy me a coffee by sending a PayPal donation through the [direct contribution page](https://www.paypal.com/donate?business=paolo.ruba.1913%40gmail.com&no_recurring=0&item_name=Support+RScreenRec&currency_code=EUR).
+Enjoying RScreenRec? [Support its development with a PayPal donation](https://www.paypal.com/donate?business=paolo.ruba.1913%40gmail.com&no_recurring=0&item_name=Support+RScreenRec&currency_code=EUR).
