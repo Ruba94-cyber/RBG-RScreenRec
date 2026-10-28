@@ -1,6 +1,6 @@
 # RBG - RScreenRec
 
-**Simple screen and window recording for Windows.** Record one monitor or a specific application window, then save directly to MP4.
+**Simple screen and window recording for Windows.** Choose a monitor in a multi-display setup or record a specific application window, then save directly to MP4.
 
 ## Download
 
@@ -10,18 +10,18 @@ Requires Windows and .NET Framework 4.8. No separate video encoder or installati
 
 ## Features
 
-- **Screen recording:** captures the monitor under your mouse pointer, including cursor and touch highlights.
+- **Multi-monitor recording:** move your mouse onto the display you want to record, then start; only that monitor is captured.
+- **Screen recording:** includes cursor and touch highlights on the selected monitor.
 - **Window recording:** captures only the selected application window, without other overlapping windows or desktop notifications. Continue using other apps while recording.
 - **Ready-to-share MP4:** H.264 video at 30 FPS.
 - **Pause and resume:** skip breaks without adding frozen time to the video.
 - **Recording indicator:** a draggable REC badge remembers its position and changes to PAUSE when paused; adjust its size in Settings.
-- **Multiple displays:** handles different monitor sizes, orientations, and display scaling.
 
 ## How to use
 
 | Action | What to do |
 | --- | --- |
-| **Start screen recording** | Open `RBG - RScreenRec.exe` normally. |
+| **Record a specific monitor** | Move the cursor onto that monitor, then open `RBG - RScreenRec.exe` normally. |
 | **Record a window** | Hold **Shift** while opening the app, then select a window, search by title, or use **Click a window...** |
 | **Stop and save** | Open the executable again, or press a configured recording shortcut. |
 | **Open Settings** | Hold **Ctrl + Shift** while opening the executable. |
