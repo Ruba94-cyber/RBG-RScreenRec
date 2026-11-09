@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Icon_screenshotrecord.ico" width="112" alt="RBG - RScreenRec official application icon" />
+  <img src="assets/rscreenrec-icon-256.png" width="112" alt="RBG - RScreenRec official application icon" />
 </p>
 
 <h1 align="center">RBG - RScreenRec</h1>
